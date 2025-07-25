@@ -1,0 +1,20 @@
+# ignore common data/model files
+*.nii
+*.nii.gz
+*.pth
+*.h5
+/data/
+# /results/
+*/__pycache__/
+__pycache__/
+/*.log
+.env
+ROIs_Overlap/
+logs/
+*.png
+
+# ignore specific directories
+*_results/
+GP-DIP/
+stroke_applying_test/
+

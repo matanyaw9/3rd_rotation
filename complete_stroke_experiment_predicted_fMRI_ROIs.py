@@ -41,7 +41,7 @@ stroke_predictor = StrokeVoxelPredictor()
 
 # This is Matanya's config file - just to play with the script
 sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-import ROI_actions
+from ROI_actions import *
 from datetime import timedelta
 import argparse
 from datetime import datetime
@@ -57,18 +57,18 @@ def get_roi_names(subset_rois):
     ROIs_places = ['OPA', 'PPA', 'RSC']
     ROIs_words = ['OWFA', 'VWFA-1', 'VWFA-2', 'mfs-words', 'mTL-words']
 
-    ROIs = ROIs_bodies + ROIs_faces + ROIs_places + ROIs_words
+    ROI_names = ROIs_bodies + ROIs_faces + ROIs_places + ROIs_words
 
     if subset_rois is not None:
         # Filter ROIs based on user input
         for roi in subset_rois:
-            if roi not in ROIs:
-                print(f"ROI '{roi}' is not a valid ROI. Available ROIs: {ROIs}")
+            if roi not in ROI_names:
+                print(f"ROI '{roi}' is not a valid ROI. Available ROIs: {ROI_names}")
 
-        ROIs = [roi for roi in subset_rois if roi in ROIs]
-        if not ROIs:
+        ROI_names = [roi for roi in subset_rois if roi in ROI_names]
+        if not ROI_names:
             raise ValueError("No valid ROIs provided in --roi_to_process argument.")
-    return ROIs
+    return ROI_names
 
 
 def run_experiment(args_config):
@@ -124,7 +124,42 @@ def run_experiment(args_config):
     # Testing voxel embeddings
     voxel_embeddings = model.voxel_embed # Has shape [315997, 256]
     voxel_embeddings = voxel_embeddings[inds]
+    
+    ROI_names = get_roi_names(args_config['roi_to_process'])  # Get the list of ROIs to process
+    predefined_ROI_indices_dict = {}
 
+    # Creating a dictionary of ROI indices (iterating over copy because we remove ROIs that don't exist)
+    for ROI in ROI_names.copy():
+        
+        roi_indices = get_roi_indices(stroke_sub, ROI)
+        
+        if roi_indices is None:
+            ROI_names.remove(ROI)
+        else:
+            predefined_ROI_indices_dict[ROI] = roi_indices
+        
+    roi_infer_configs = {
+        'mean-euc-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+                                                        center_method='mean', 
+                                                        metric='euclidean', 
+                                                        discrimination_method='nearest_voxels',),
+        'mean-cos-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+                                                        center_method='mean', 
+                                                        metric='cosine', 
+                                                        discrimination_method='nearest_voxels',),
+                                                        
+        'ms-euc-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+                                                        center_method='meanshift', 
+                                                        metric='euclidean', 
+                                                        discrimination_method='nearest_voxels',),
+       'ms-euc-n_cntr': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+                                                        center_method='meanshift', 
+                                                        metric='euclidean', 
+                                                        discrimination_method='nearest_center',),                                                 
+    }
+    if args_config['modify_roi']:
+        for config in roi_infer_configs.values():
+            config.infer_roi_dict()
 
 
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
@@ -173,71 +208,9 @@ def run_experiment(args_config):
         else:
             print('save_as_png was called with no metadata. Saving without metadata.')
             img.save(save_path)
-
     
-    def save_as_png_old2(array, save_path, title=None, subtitle=None, figsize=(4,4)):
-        # 1. Convert torch tensor to numpy
-        if isinstance(array, torch.Tensor):
-            array = array.cpu().numpy()
-        # 2. Reorder channels if needed
-        if array.ndim == 3 and array.shape[0] == 3:
-            array = array.transpose(1, 2, 0)
-        # 3. Scale floats to [0–255]
-        if array.dtype in (np.float32, np.float64):
-            array = (array * 255).astype(np.uint8)
-        elif array.dtype == np.uint8:
-            pass
-        else:
-            raise ValueError(f"Unsupported dtype {array.dtype}")
-
-        # 4. Create figure & axis
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.imshow(array)
-        ax.axis('off')
-
-        # 5. Main title
-        if title is not None:
-            ax.set_title(title, fontsize=14, pad=6)
-
-        # 6. Subtitle (smaller, placed just below main title)
-        if subtitle is not None:
-            # Using `fig.text` so we can position it precisely
-            fig.text(0.5, 0.92, subtitle,
-                    ha='center', va='top',
-                    fontsize=10, color='gray')
-
-        # 7. Save & clean up
-        plt.tight_layout(pad=0)
-        fig.savefig(save_path, dpi=150, bbox_inches='tight', pad_inches=0)
-        plt.close(fig)
-
-
-    def save_as_png_old(array, save_path, title=None):
-        
-        # If the image is a troch tensor, convert it to a numpy array
-        if isinstance(array, torch.Tensor):
-            array = array.cpu().numpy()
-        
-        # If array is (3,224,224), transpose it
-        if array.shape[0] == 3:
-            array = array.transpose(1, 2, 0)
-        
-        # Check if values are floats between 0-1 and scale accordingly
-        if array.dtype == np.float32 or array.dtype == np.float64:
-            array = (array * 255).astype(np.uint8)
-        elif array.dtype == np.uint8:
-            # Already in correct range, no scaling needed
-            pass
-        else:
-            raise ValueError(f"Unsupported array dtype: {array.dtype}. Expected float32/64 or uint8")
-        if title is not None:
-            print('Saving image with title:', title) 
-            plt.title(title)
-        # Save as PNG
-        plt.imsave(save_path, array)
-        
+    
     # DIP parameters
-
     INPUT = 'noise'
     pad = 'reflection'
     OPT_OVER = 'net' # optimize over the net parameters only
@@ -257,8 +230,6 @@ def run_experiment(args_config):
     save_throughout = args_config['save_throughout']
     n_saves = 5
     save_every = num_iter_stroke // n_saves
-
-    ROIs = get_roi_names(args_config['roi_to_process'])  # Get the list of ROIs to process
 
     # Creating image indices
 
@@ -472,60 +443,15 @@ def run_experiment(args_config):
             continue
         print(f'\nStarting the ROIs loop for image {img_idx}...\n')
         
-        meanshift_center_dict = {}
-        
-        predefined_ROI_indices = {}
-
-        # Creating a dictionary of ROI indices (iterating over copy because we remove ROIs that don't exist)
-        for ROI in ROIs.copy():
-            
-            roi_indices = get_roi_indices(stroke_sub, ROI)
-            
-            if roi_indices is None:
-                ROIs.remove(ROI)
-                print(f"ROI {ROI} does not exist for subject {stroke_sub}. Removing from list.")
-                # print('ROI indices:', roi_indices)
-                continue
-
-            else:
-                predefined_ROI_indices[ROI] = roi_indices
-            print("ROI:", ROI)
-            if args_config['modify_roi']:
-                meanshift_center_dict[ROI] = ROI_actions.infer_center_by_meanshift(roi_indices, voxel_embeddings)
-                # print(f"{ROI} center shape: {tuple(center_dict[ROI].shape)}")
-
-        if args_config['modify_roi']:
-            labels, meanshift_roi_indices = ROI_actions.assign_voxels_to_rois(voxel_embeddings, meanshift_center_dict, ROIs)
-
-        
-        for ROI in ROIs:
+        for ROI in ROI_names:
             mega_roi_dict = dict()
 
-            mega_roi_dict['Predefined_ROI'] = predefined_ROI_indices[ROI]
+            mega_roi_dict['Predefined_ROI'] = predefined_ROI_indices_dict[ROI]
 
             if args_config['modify_roi']:
-                mega_roi_dict['Top-K_ROI'] = ROI_actions.infer_by_center_of_mass(predefined_ROI_indices[ROI],
-                                                                                        voxel_embeddings, 
-                                                                                        threshold=None, 
-                                                                                        top_k=len(predefined_ROI_indices[ROI]),
-                                                                                        use_angle=False)
-                if args_config['use_angle']:
-                    mega_roi_dict['Top-K_ROI_angle'] = ROI_actions.infer_by_center_of_mass(predefined_ROI_indices[ROI],
-                                                                                            voxel_embeddings, 
-                                                                                            threshold=None, 
-                                                                                            top_k=len(predefined_ROI_indices[ROI]),
-                                                                                            use_angle=True)
-                    
-                    # avg_dist_from_center_of_mass = ROI_actions.get_average_distance(predefined_ROI_indices[ROI],
-                    #                                                                 voxel_embeddings,
-                    #                                                                 use_angle=args_config['use_angle'])
-                    # mega_roi_dict['avg_dist_ROI'] = ROI_actions.infer_by_center_of_mass(predefined_ROI_indices[ROI], 
-                    #                                                                     voxel_embeddings, 
-                    #                                                                     threshold=avg_dist_from_center_of_mass, 
-                    #                                                                     top_k=None,
-                    #                                                                     use_angle=args_config['use_angle'])
-                    # mega_roi_dict['Threshold_ROI'] = ROI_actions.infer_by_center_of_mass(predefined_ROI_indices[ROI], voxel_embeddings, threshold=0.5, top_k=None)
-                mega_roi_dict['Meanshift_ROI'] = meanshift_roi_indices[ROI]
+                for roi_infer_name, config in roi_infer_configs.items():
+                    print(f'Inferring ROI {ROI} with config: {roi_infer_name}')
+                    mega_roi_dict[roi_infer_name] = config.inferred_ROI_indices_dict[ROI]
             
             roi_path = f'{image_save_path}/roi_{ROI}'
             if not os.path.exists(roi_path):
@@ -591,13 +517,13 @@ def run_experiment(args_config):
                         # Saving intermediate image 
                         if save_throughout and state_dict['i'] % save_every == 0 and state_dict['i'] != 0:
                             img_meta = {
-                                'title': f'{roi_version} - start original',
+                                'title': f'{roi_version} - start original - size {roi_indices.shape[0]}',
                                 'Image Index': img_idx,
                                 'Image Type': args_config['image_type'],
                                 'ROI Version': roi_version,
                                 'ROI Name': ROI,
                                 'ROI Size': roi_indices.shape[0],
-                                    'Run Name': args_config['run'],
+                                'Run Name': args_config['run'],
                                 'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 'Iteration': state_dict['i']
                             }
@@ -619,7 +545,7 @@ def run_experiment(args_config):
                     
                     print(f'Finished decoding stroke fMRI for image {img_idx}, ROI: {roi_version} {ROI} (step 3.1)')
                     img_meta = {
-                        'title': f'{roi_version} - start original',
+                        'title': f'{roi_version} - start original  - size {roi_indices.shape[0]}',
                         'Image Index': img_idx,
                         'Image Type': args_config['image_type'],
                         'ROI Version': roi_version,
@@ -669,7 +595,7 @@ def run_experiment(args_config):
                     # Saving intermediate image 
                     if save_throughout and state_dict['i'] % save_every == 0 and state_dict['i'] != 0:
                         img_meta = {
-                            'title': f'{roi_version} - start fMRI',
+                            'title': f'{roi_version} - start fMRI - size {roi_indices.shape[0]}',
                             'Image Index': img_idx,
                             'Image Type': args_config['image_type'],
                             'ROI Version': roi_version,
@@ -698,7 +624,7 @@ def run_experiment(args_config):
                 print(f'Finished decoding stroke fMRI for image {img_idx}, ROI: {roi_version} {ROI} (step 3.2)')
                 # Saving the stroke fMRI final image
                 img_meta = {
-                    'title': f'{roi_version} - start fMRI',
+                    'title': f'{roi_version} - start fMRI - size {roi_indices.shape[0]}',
                     'Image Index': img_idx,
                     'Image Type': args_config['image_type'],
                     'ROI Version': roi_version,
@@ -709,107 +635,9 @@ def run_experiment(args_config):
                 }
                 save_as_png(state_dict['out_avg_np'], f'{roi_path}/img_{img_idx}_stroke_{roi_version}_{ROI}_start_fMRI.png', metadata=img_meta)
 
-                create_montage(input_dir=roi_path, input_dir2=image_save_path, main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
+                if args_config['create_montage']:
+                    create_montage(input_dir=roi_path, input_dir2=image_save_path, main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
 
 
     print('Finished all experiments!')
     
-
-def argparse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Run the complete stroke experiment on ROIs.')
-
-    parser.add_argument('--save_path', type=str, default=None,
-                        help='Root path to save results.')
-    parser.add_argument('--run', type=str, default=None, help='Name of the run for saving results.')
-    parser.add_argument('--steps_to_do', type=int, nargs='+', default=[1, 2, 3, 4],
-                        help='List of steps to perform in the experiment.')
-    parser.add_argument('--image_type', type=str, default='shared',
-                        help='Type of images to use in the experiment (e.g., "shared", "excluded").')
-    parser.add_argument('--images_indices', type=int, nargs='+', default=[1, 4],
-                        help='List of image indices to process in the experiment.')
-    parser.add_argument('--modify_roi', action='store_true',
-                        help='Whether to modify the ROI during the experiment.')
-    parser.add_argument('--save_throughout', action='store_true',
-                        help='Whether to save intermediate results throughout the experiment.')
-    parser.add_argument('--use_angle', action='store_true',
-                        help='Whether to use angle-based distance for ROI inference.')
-    parser.add_argument('--roi_to_process', type=str, nargs='+', default=None,
-                        help='List of specific ROIs to process. If None, all predefined ROIs will be processed.')
-    # parser.add_argument('--roi_indexes_file', type=str, required=True,
-                        # help='Path to the file containing ROI indexes.')
-
-    return parser.parse_args()
-
-def small_script():
-    a = 1 + 1
-    a = a / 0
-    return a
-
-def send_notification(message):
-    """Send a notification using ntfy."""
-    try:
-        requests.post(
-            "https://ntfy.sh/complete_stroke_experiment_predicted_fMRI_ROIs",
-            data=message.encode("utf-8")
-        )
-    except Exception as e:
-        print(f"Failed to send ntfy notification: {e}")
-
-if __name__ == "__main__":
-    start_time = time.time()
-    args = argparse_args()
-    current_date = datetime.now().strftime("%y_%m_%d")
-    default_save_path = f'/home/matanyaw/DIP_decoder/matanya_results/results_{current_date}'
-    if args.save_path is None:
-        save_path = default_save_path
-    else:
-        save_path = args.save_path
-    
-    if args.run:
-        save_path = os.path.join(save_path, f'run_{args.run}')
-        os.makedirs(save_path, exist_ok=True)
-
-    args_config = {
-        'images_indices': args.images_indices,  # List of image indices to process in the experiment
-        'save_path': save_path,  # Root path to save results
-        'steps_to_do': args.steps_to_do,  # List of steps to perform in the experiment
-        'image_type': args.image_type,  # Type of images to use in the experiment
-        'modify_roi': args.modify_roi,  # Whether to modify the ROI during the experiment
-        'run': args.run,  # Name of the run for saving results
-        'save_throughout': args.save_throughout,
-        'use_angle': args.use_angle,  # Whether to use angle-based distance for ROI inference
-        'roi_to_process': args.roi_to_process,  # List of specific ROIs to process
-        
-        # 'save_throughout': true,
-        # 'n_saves': 5,
-        # 'num_iter_no_stroke': 4001,
-        # 'num_iter_stroke': 601,
-        # 'learning_rate': 0.001,
-    }
-
-    # Just to see which GPU is being used
-    if torch.cuda.is_available():
-        dev_id = torch.cuda.current_device()
-        print(f"Using CUDA device #{dev_id}: {torch.cuda.get_device_name(dev_id)}")
-        print(f"Total GPUs available: {torch.cuda.device_count()}")
-    else:
-        print("No GPU detected!")
-
-
-    try: 
-        run_experiment(args_config)
-        # small_script()
-        end_time = time.time()
-        time_taken = timedelta(seconds=end_time - start_time)
-        print(f'Total time taken: {time_taken}')
-        send_notification(f"✅ Experiment completed successfully\nRun: {args_config['run']} Time: {time_taken}\n")
-    except Exception as e:
-        end_time = time.time()
-        time_taken = timedelta(seconds=end_time - start_time)
-        print(f'Total time taken: {time_taken}')
-        send_notification(f"❌ Experiment failed\nRun: {args_config['run']} with error: {e}\n Time: {time_taken}\n")
-        raise
-    
-
-# python complete_stroke_experiment_predicted_fMRI_ROIs.py --images_indices 1 4  --steps_to_do 1 2 3 --run 12

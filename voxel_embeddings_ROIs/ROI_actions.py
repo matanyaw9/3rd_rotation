@@ -143,6 +143,17 @@ def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
     return torch.from_numpy(densest_center).to(device).float()
 
 
+def infer_cosine_distances(voxel_embeddings: torch.Tensor, centers: torch.Tensor, eps=1e-8):
+    device = voxel_embeddings.device
+    # Normalize embeddings and centers
+    centers = centers.to(voxel_embeddings.device)
+    center_norm = centers / centers.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [R, D]
+    emb_norm = voxel_embeddings / voxel_embeddings.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [N, D]
+    # Compute cosine distances
+    cos_sim   = emb_norm @ center_norm.t()
+    distances = (1 - cos_sim).clamp(min=0.0, max=2.0)
+
+    return distances
 
 def assign_voxels_to_rois(voxel_embeddings: torch.Tensor,
                           centers_dict: dict,
@@ -179,165 +190,132 @@ def assign_voxels_to_rois(voxel_embeddings: torch.Tensor,
 
     return labels, roi_to_indices
 
-
-class ROIInferenceConfig:
+class RoiInferConfig:
     """
     Configuration object for ROI inference.
 
     Attributes:
-        center_method (str): Method to find ROI center ('mean', 'meanshift', etc.)
-        distance_method (str): Method to compute distance ('euclidean', 'angle', etc.)
-        discrimination_method (str): How to discriminate ROI voxels ('threshold', 'top_k', etc.)
+        center_method (str): Method to find ROI center ('mean', 'meanshift')
+        distance_method (str): Method to compute distance ('euclidean', 'cosine', etc.)
+        discrimination_method (str): How to discriminate ROI voxels ('nearest_center', 'nearest_voxels', 'avg_distance')
         params (dict): Additional parameters for methods.
     """
-    def __init__(self, center_method='mean', metric='euclidean', discrimination_method='threshold', threshold_dict=None, top_k_dict=None, print_run=True):
+    def __init__(self, 
+                 voxel_embeddings: torch.Tensor,
+                 predefined_ROI_indices_dict: dict,
+                 center_method='mean', 
+                 metric='euclidean', 
+                 discrimination_method='nearest_voxels',
+                 ):
+        self.voxel_embeddings = voxel_embeddings
+        self.predefined_ROI_indices_dict = predefined_ROI_indices_dict
+
         self.center_method = center_method
-        self.distance_method = metric
+        self.metric = metric
         self.discrimination_method = discrimination_method
-        self.threshold_dict = threshold_dict or {}
-        self.top_k_dict = top_k_dict or {}
-        self.print_run = print_run
+        self.ROI_names = list(predefined_ROI_indices_dict.keys())
+        
+        self.roi_centers = None
+        self.inferred_ROI_indices_dict = None
 
     def __repr__(self):
-        return (f"ROIInferenceConfig(center_method={self.center_method}, "
+        return (f"RoiInferConfig(center_method={self.center_method}, "
                 f"distance_method={self.distance_method}, "
                 f"discrimination_method={self.discrimination_method}, "
-                f"params={self.params})")
+                )
     
 
-def infer_roi_dict(voxel_embeddings, predefined_ROI_indices_dict, config: ROIInferenceConfig):
-    """
-    Infer the ROI based on the given configuration.
+    def infer_roi_dict(self):
+        """The Main function - Infer the ROI indices based on the given configuration.
+        """
+        self.infer_centers()
+        distances = self.infer_distances()
+        self.infer_roi_indices(distances)
+        return self.inferred_ROI_indices_dict
 
-    Args:
-        voxel_embeddings: [num_voxels, embedding_dim] FloatTensor of all voxel embeddings.
-        predefined_ROI_indices: 1D LongTensor of voxel indices for the predefined ROI.
-        config: ROIInferenceConfig object with inference settings.
+    
+    def infer_centers(self):
+        """Infer the centers of all ROIs based on the voxel embeddings.
+        """
+        inferred_centers = {}
+        for ROI in self.predefined_ROI_indices_dict:
+                if self.center_method == 'mean':
+                    voxels = self.voxel_embeddings[self.predefined_ROI_indices_dict[ROI]]
+                    center_of_mass = voxels.mean(dim=0)
 
-    Returns:
-        inferred_ROI_indices: 1D NumPy array of inferred voxel indices for the ROI.
-    """
+                elif self.center_method == 'meanshift':
+                    center_of_mass = infer_center_by_meanshift(self.predefined_ROI_indices_dict[ROI], self.voxel_embeddings)
 
-    centers = infer_centers(voxel_embeddings, predefined_ROI_indices_dict, center_method=config.center_method)
-    distances, center_names = infer_distances(voxel_embeddings, centers, metric=config.distance_method)
-    inferred_ROI_indices = infer_roi_indices(
-        centers, distances, discrimination_method=config.discrimination_method,
-        threshold_dict=config.threshold_dict, top_k_dict=config.top_k_dict
-    )
-    return inferred_ROI_indices
-
-def infer_centers(voxel_embeddings, predefined_ROI_indices_dict, center_method='mean'):
-    """
-    Infer the center of the ROI based on the given configuration.
-
-    Args:
-        voxel_embeddings: [num_voxels, embedding_dim] FloatTensor of all voxel embeddings.
-        predefined_ROI_indices: 1D LongTensor of voxel indices for the predefined ROI.
-        config: ROIInferenceConfig object with inference settings.
-
-    Returns:
-        center: FloatTensor of shape [embedding_dim], the inferred center of the ROI.
-    """
-    inferred_centers = {}
-
-    for ROI in predefined_ROI_indices_dict:
-            if center_method == 'mean':
-                voxels = voxel_embeddings[predefined_ROI_indices_dict[ROI]]
-                center_of_mass = voxels.mean(dim=0)
-
-            elif center_method == 'meanshift':
-                center_of_mass = infer_center_by_meanshift(predefined_ROI_indices_dict[ROI], voxel_embeddings)
-            
-            else: 
-                raise ValueError(f"Unknown center method: {center_method}")
-            
-            inferred_centers[ROI] = center_of_mass
-
-    return inferred_centers
-
-def infer_cosine_distances(voxel_embeddings: torch.Tensor, centers: torch.Tensor, eps=1e-8):
-    device = voxel_embeddings.device
-    # Normalize embeddings and centers
-    centers = centers.to(voxel_embeddings.device)
-    center_norm = centers / centers.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [R, D]
-    emb_norm = voxel_embeddings / voxel_embeddings.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [N, D]
-    # Compute cosine distances
-    cos_sim   = emb_norm @ center_norm.t()
-    distances = (1 - cos_sim).clamp(min=0.0, max=2.0)
-
-    return distances
+                else:
+                    raise ValueError(f"Unknown center method: {self.center_method}")
+                
+                inferred_centers[ROI] = center_of_mass
+        self.roi_centers = inferred_centers
+        return inferred_centers
 
 
-def infer_distances(voxel_embeddings, centers, metric='euclidean'):
-    """
-    Infer distances of all voxels to the given centers.
 
-    Args:
-        voxel_embeddings: [N, D] FloatTensor.
-        centers: dict mapping names → [D]-tensors.
-        metric: str or callable, optional (See torch.cdist documentation for options).
-    Returns:
-        distances: [N, R] Tensor of distances.
-        center_names: list of length R.
-    """
-    device = voxel_embeddings.device
-    center_names = list(centers.keys())
-    center_tensors = torch.stack([centers[n] for n in center_names], dim=0).to(device)
-    if metric == 'cosine':
-        distances = infer_cosine_distances(voxel_embeddings, center_tensors)
-    elif metric == 'euclidean':
-        # Using torch.cdist for Euclidean distance
-        distances = torch.cdist(voxel_embeddings, center_tensors, p=2)
-    return distances, center_names
+    def infer_distances(self):
+        """
+        Infer distances from voxel embeddings to the centers of all ROIs.
+        """
+        device = self.voxel_embeddings.device
+        # center_names = list(self.roi_centers.keys())
+        center_tensors = torch.stack([self.roi_centers[n] for n in self.ROI_names], dim=0).to(device)
+        if self.metric == 'cosine':
+            distances = infer_cosine_distances(self.voxel_embeddings, center_tensors)
+        elif self.metric == 'euclidean':
+            # Using torch.cdist for Euclidean distance
+            distances = torch.cdist(self.voxel_embeddings, center_tensors, p=2)
+        return distances
     
 
 
-def infer_roi_indices(centers, distances, discrimination_method='threshold', threshold_dict={}, top_k_dict={}, print_run=True):
-    """
-    Infer ROI for each ROI indices based on distances to centers.
+    def infer_roi_indices(self, distances):
+        """
+        Infer the indices of voxels belonging to each ROI based on the distances to the centers.
+        This method uses the configured discrimination method to determine how to assign voxels to ROIs.
+        """
+        inferred_ROI_indices = {}
 
-    Args:
-        voxel_embeddings: [num_voxels, embedding_dim] FloatTensor of all voxel embeddings.
-        centers: dict mapping ROI names to their inferred centers.
-        distances: Tensor of shape [num_voxels, num_ROIs] with distances to each center.
-        discrimination_method: Method to discriminate ROI voxels ('threshold', 'top_k', 'nearest_center').
-        params: Additional parameters for the discrimination method.
+        if self.discrimination_method == 'nearest_center':
+            # For 'nearest_center', we simply assign each voxel to the nearest center
+            voxel_assignments = distances.argmin(dim=1)
+            for roi_idx, roi_name in enumerate(self.roi_centers.keys()):
+                indices = torch.where(voxel_assignments == roi_idx)[0].cpu().numpy()
+                inferred_ROI_indices[roi_name] = indices
 
-    Returns:
-        inferred_ROI_indices: dict mapping ROI names to 1D NumPy arrays of inferred voxel indices.
-    """
-    DEFAULT_THRESHOLD = 0.5
-    DEFAULT_TOP_K = 100
-    inferred_ROI_indices = {}
+        elif self.discrimination_method == 'avg_distance':
+            inferred_ROI_indices = infer_by_avg_distance(self, distances)
 
-    if discrimination_method == 'nearest_center':
-        # For 'nearest_center', we simply assign each voxel to the nearest center
-        voxel_assignments = distances.argmin(dim=1)
-        for roi_idx, roi_name in enumerate(centers.keys()):
-            indices = torch.where(voxel_assignments == roi_idx)[0].cpu().numpy()
-            inferred_ROI_indices[roi_name] = indices
+        elif self.discrimination_method == 'nearest_voxels':
+            inferred_ROI_indices = infer_by_nearest_voxels(self, distances)
+        else:
+            raise ValueError(f"Unknown discrimination method: {self.discrimination_method}")
+        self.inferred_ROI_indices_dict = inferred_ROI_indices
         return inferred_ROI_indices
     
-    for roi_idx, roi_name in enumerate(centers.keys()):
-        if discrimination_method == 'threshold':
-            if len(threshold_dict) == 0:
-                print(f"Using default threshold {DEFAULT_THRESHOLD} for all ROIs.")
-            threshold = threshold_dict.get(roi_name, DEFAULT_THRESHOLD)
-            
-            print(f"Using threshold {threshold} for ROI {roi_name}")
-            indices = torch.where(distances[:, roi_idx] < threshold)[0].cpu().numpy()
-        
-        elif discrimination_method == 'top_k':
-            if len(top_k_dict) == 0:
-                print(f"Using default top_k {DEFAULT_TOP_K} for all ROIs.")
-            top_k = top_k_dict.get(roi_name, DEFAULT_TOP_K)
-            if print_run:
-                print(f"Using top_k {top_k} for ROI {roi_name}")
-            indices = torch.topk(distances[:, roi_idx], k=top_k, largest=False).indices.cpu().numpy()
-        
-        else:
-            raise ValueError(f"Unknown discrimination method: {discrimination_method}")
-        
-        inferred_ROI_indices[roi_name] = indices
 
-    return inferred_ROI_indices
+def infer_by_avg_distance(inferConfig: RoiInferConfig, distances):
+    inferred_indices = {}
+    for i, ROI in enumerate(inferConfig.ROI_names):
+        predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
+        avg_dist = distances[predifined_indices, i].mean()
+        print(f"Average distance for ROI '{ROI}': {avg_dist:.4f}")
+        mask = distances[:, i] < avg_dist
+        chosen = torch.where(mask)[0]
+        inferred_indices[ROI] = chosen.cpu().numpy()
+    return inferred_indices
+
+
+def infer_by_nearest_voxels(inferConfig: RoiInferConfig, distances):
+    inferred_indices = {}
+
+    for i, ROI in enumerate(inferConfig.ROI_names):
+        predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
+        roi_size = len(predifined_indices)
+        relevant_distances = distances[:, i]
+        inferred_indices[ROI] = torch.topk(relevant_distances, k=roi_size, dim=0, largest=False).indices.cpu().numpy()
+    return inferred_indices
+
+        

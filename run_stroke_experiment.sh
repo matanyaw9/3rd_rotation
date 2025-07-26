@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=run_with_montage
-#SBATCH --output=logs/%j_trun_with_montage.out
+#SBATCH --job-name=day_run
+#SBATCH --output=logs/%j_day_run.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,16 +17,16 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="run_with_montage"
+RUN_NAME="day_run"
 
 # Launch the script with required arguments
 echo "Running python script"
-srun python -u complete_stroke_experiment_predicted_fMRI_ROIs.py \
+srun python -u stroke_experimet_CLI.py \
     --run "$RUN_NAME" \
     --image_type shared \
-    --images_indices 130 131 69 96 99 \
+    --images_indices 131 \
     --modify_roi \
-    --use_angle \
+    --create_montage \
     # --roi_to_process EBA \
     # --steps_to_do 1 2 3 4 \
     # --save_path

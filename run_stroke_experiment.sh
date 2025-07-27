@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=day_run
-#SBATCH --output=logs/%j_day_run.out
+#SBATCH --job-name=test_steps_2_4
+#SBATCH --output=logs/%j_test_steps_2_4.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,18 +17,18 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="day_run"
+RUN_NAME="test_steps_2_4"
 
 # Launch the script with required arguments
 echo "Running python script"
 srun python -u stroke_experimet_CLI.py \
     --run "$RUN_NAME" \
     --image_type shared \
-    --images_indices 131 \
+    --images_indices 21 \
     --modify_roi \
     --create_montage \
+    --steps_to_do 2 4 \
     # --roi_to_process EBA \
-    # --steps_to_do 1 2 3 4 \
     # --save_path
 
 # Creating image indices

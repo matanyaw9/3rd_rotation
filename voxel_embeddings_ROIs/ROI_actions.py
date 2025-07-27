@@ -217,6 +217,7 @@ class RoiInferConfig:
         
         self.roi_centers = None
         self.inferred_ROI_indices_dict = None
+        self.ROIless_indices = None
 
     def __repr__(self):
         return (f"RoiInferConfig(center_method={self.center_method}, "
@@ -294,6 +295,10 @@ class RoiInferConfig:
             raise ValueError(f"Unknown discrimination method: {self.discrimination_method}")
         self.inferred_ROI_indices_dict = inferred_ROI_indices
         return inferred_ROI_indices
+    
+    def infer_roiless_indices(self, sub_indices):
+        self.ROIless_indices = find_voxels_with_no_roi(sub_indices, self.inferred_ROI_indices_dict)
+
     
 
 def infer_by_avg_distance(inferConfig: RoiInferConfig, distances):

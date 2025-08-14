@@ -139,27 +139,34 @@ def run_experiment(args_config):
             predefined_ROI_indices_dict[ROI] = roi_indices
         
     roi_infer_configs = {
-        'mean-euc-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+        'mean-euc-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
                                                         center_method='mean', 
                                                         metric='euclidean', 
                                                         discrimination_method='nearest_voxels',),
-        'mean-cos-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+
+        'mean-cos-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
                                                         center_method='mean', 
                                                         metric='cosine', 
                                                         discrimination_method='nearest_voxels',),
                                                         
-        'ms-euc-nearest': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+        'ms-euc-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
                                                         center_method='meanshift', 
                                                         metric='euclidean', 
                                                         discrimination_method='nearest_voxels',),
-       'ms-euc-n_cntr': RoiInferConfig(voxel_embeddings, predefined_ROI_indices_dict,
+
+        'ms-cos-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
+                                                center_method='meanshift', 
+                                                metric='cosine', 
+                                                discrimination_method='nearest_voxels',),  
+
+       'ms-euc-n_cntr': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
                                                         center_method='meanshift', 
                                                         metric='euclidean', 
                                                         discrimination_method='nearest_center',),                                                 
     }
     if args_config['modify_roi']:
         for config in roi_infer_configs.values():
-            config.infer_roi_dict()
+            config.infer_roi_coverage()
 
 
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
@@ -278,85 +285,84 @@ def run_experiment(args_config):
 
         # Step 1: Fitting the network to the image
         # =====================================
-        if 1 in args_config['steps_to_do']:
 
-            in_img = trans_imgs(images[img_idx])
+        in_img = trans_imgs(images[img_idx])
 
-            # Initialize DIP network
-            net = get_net(input_depth, 'skip', pad,
-                        skip_n33d=128, 
-                        skip_n33u=128,
-                        skip_n11=2,
-                        num_scales=3,
-                        upsample_mode='bilinear').type(dtype)
+        # Initialize DIP network
+        net = get_net(input_depth, 'skip', pad,
+                    skip_n33d=128, 
+                    skip_n33u=128,
+                    skip_n11=2,
+                    num_scales=3,
+                    upsample_mode='bilinear').type(dtype)
 
-            ## Optimize
-            state_dict = {
-                'i': 0,
-                'out_avg': None,
-                'out_avg_np': None,
-                'net_input': get_noise(input_depth, INPUT, (224, 224),var=0.1).type(dtype).detach(),
-            }
-            # net_input = get_noise(input_depth, INPUT, (224, 224),var=0.1).type(dtype).detach()
-            net_input_saved = state_dict['net_input'].detach().clone()
-            noise = state_dict['net_input'].detach().clone()
+        ## Optimize
+        state_dict = {
+            'i': 0,
+            'out_avg': None,
+            'out_avg_np': None,
+            'net_input': get_noise(input_depth, INPUT, (224, 224),var=0.1).type(dtype).detach(),
+        }
+        # net_input = get_noise(input_depth, INPUT, (224, 224),var=0.1).type(dtype).detach()
+        net_input_saved = state_dict['net_input'].detach().clone()
+        noise = state_dict['net_input'].detach().clone()
 
+        out = net(state_dict['net_input'])
+        rec_img_np = out.detach().cpu().numpy()[0]
+
+        def closure():
+
+            # global i, out_avg, net_input, out_avg_np
+            if reg_noise_std > 0:
+                state_dict['net_input'] = net_input_saved + (noise.normal_() * reg_noise_std)
             out = net(state_dict['net_input'])
-            rec_img_np = out.detach().cpu().numpy()[0]
 
-            def closure():
+            if state_dict['out_avg'] is None:
+                state_dict['out_avg'] = out.detach()
+            else:
+                state_dict['out_avg'] = state_dict['out_avg'] * exp_weight + out.detach() * (1 - exp_weight)
 
-                # global i, out_avg, net_input, out_avg_np
-                if reg_noise_std > 0:
-                    state_dict['net_input'] = net_input_saved + (noise.normal_() * reg_noise_std)
-                out = net(state_dict['net_input'])
+            loss = F.mse_loss(out, in_img.cuda())
 
-                if state_dict['out_avg'] is None:
-                    state_dict['out_avg'] = out.detach()
-                else:
-                    state_dict['out_avg'] = state_dict['out_avg'] * exp_weight + out.detach() * (1 - exp_weight)
+            loss.backward()
 
-                loss = F.mse_loss(out, in_img.cuda())
-
-                loss.backward()
-
-                state_dict['out_avg_np'] = state_dict['out_avg'].detach().cpu().numpy()[0]
-                
-                # Saving intermediate image
-                # if save_throughout and state_dict['i'] % save_every == 0 and state_dict['i'] != 0:
-                #     save_as_png(state_dict['out_avg_np'], f'{image_save_path}/img_{img_idx}_fitted_image_iter_{state_dict['i']}.png')
-                
-                state_dict['i'] += 1
-                return loss
-
-            ## Optimizing 
+            state_dict['out_avg_np'] = state_dict['out_avg'].detach().cpu().numpy()[0]
             
-            optimizer = torch.optim.Adam(net.parameters(), lr=LR)
-            for j in range(num_iter_no_stroke):
-                optimizer.zero_grad()
-                closure()
-                optimizer.step()
-                
-            print(f'Finished fitting on image for image {img_idx} (Step 1)')
+            # Saving intermediate image
+            # if save_throughout and state_dict['i'] % save_every == 0 and state_dict['i'] != 0:
+            #     save_as_png(state_dict['out_avg_np'], f'{image_save_path}/img_{img_idx}_fitted_image_iter_{state_dict['i']}.png')
             
-            # Saving the fitted image
-            img_meta = {
-                'title': f'DIP Fitted Image',
-                'Image Index': img_idx,
-                'Image Type': args_config['image_type'],
-                'Run Name': args_config['run'],
-                'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            save_as_png(state_dict['out_avg_np'], f'{image_save_path}/img_{img_idx}_fitted_image_final.png', metadata=img_meta)
+            state_dict['i'] += 1
+            return loss
 
-            # Saving the fitted network
-            torch.save({
-                'net_state': net.state_dict(),
-                'out_avg': state_dict['out_avg']
-            }, os.path.join(image_save_path, 'dip_on_original_image.pth'))
-
-            torch.cuda.empty_cache()
+        ## Optimizing 
         
+        optimizer = torch.optim.Adam(net.parameters(), lr=LR)
+        for j in range(num_iter_no_stroke):
+            optimizer.zero_grad()
+            closure()
+            optimizer.step()
+            
+        print(f'Finished fitting on image for image {img_idx} (Step 1)')
+        
+        # Saving the fitted image
+        img_meta = {
+            'title': f'DIP Fitted Image',
+            'Image Index': img_idx,
+            'Image Type': args_config['image_type'],
+            'Run Name': args_config['run'],
+            'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        save_as_png(state_dict['out_avg_np'], f'{image_save_path}/img_{img_idx}_fitted_image_final.png', metadata=img_meta)
+
+        # Saving the fitted network
+        torch.save({
+            'net_state': net.state_dict(),
+            'out_avg': state_dict['out_avg']
+        }, os.path.join(image_save_path, 'dip_on_original_image.pth'))
+
+        torch.cuda.empty_cache()
+    
         
         
         # Step 2: Decoding normal fMRI voxel map

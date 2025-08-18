@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=test_steps_2_4
-#SBATCH --output=logs/%j_test_steps_2_4.out
+#SBATCH --job-name=test_deletes_2
+#SBATCH --output=logs/%j_test_deletes_2.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,17 +17,17 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="test_steps_2_4"
+RUN_NAME="test_deletes_2"
 
 # Launch the script with required arguments
 echo "Running python script"
 srun python -u stroke_experimet_CLI.py \
     --run "$RUN_NAME" \
     --image_type shared \
-    --images_indices 21 \
+    --images_indices 29 51 65 69 99 \
     --modify_roi \
     --create_montage \
-    --steps_to_do 2 4 \
+    --steps_to_do 1 2 4 \
     # --roi_to_process EBA \
     # --save_path
 

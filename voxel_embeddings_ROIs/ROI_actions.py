@@ -1,9 +1,10 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
-from sklearn.manifold import TSNE
+# from sklearn.manifold import TSNE
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from scipy.spatial import distance
 
@@ -60,67 +61,90 @@ def find_voxels_with_no_roi(sub_indices, ROI_indices):
     return not_in_any_roi
 
 
-def get_average_distance(roi_indices, voxel_embeddings, center_point, metric='euclidean'):
-    """
-    Calculate the average distance of voxel embeddings in the ROI from the center of mass.
+
+# def densest_mode_center_for_roi(voxel_embeddings, roi_indices,
+#                                 metric='cosine',
+#                                 pca_dims=50,
+#                                 quantile=0.2,
+#                                 n_samples=5000,
+#                                 random_state=42):
+#     """
+#     Returns: (center_np, labels, ms_model)
+#       - center_np: the center (mode) of the densest MeanShift cluster in original 256-D space (np.ndarray)
+#       - labels: cluster labels for ROI points
+#       - ms_model: the fitted MeanShift model (on PCA space) for inspection
+#     """
+#      # 1) Slice ROI
+#     X_t = voxel_embeddings[roi_indices]  # torch [N, 256]
+
+#     # 2) Normalize for cosine if requested
+#     if metric == 'cosine':
+#         X_t = F.normalize(X_t, dim=1)
+
+#     # 3) Move to numpy
+#     X = X_t.detach().cpu().numpy()
+
+#     # 4) (Recommended) PCA to denoise + reduce dimensionality for MeanShift speed/stability
+#     if pca_dims is not None and X.shape[1] > pca_dims:
+#         pca = PCA(n_components=pca_dims, random_state=random_state)
+#         X_low = pca.fit_transform(X)
+#     else:
+#         pca = None
+#         X_low = X
+
+#     # 5) Estimate bandwidth on the reduced space
+#     bw = estimate_bandwidth(X_low,
+#                             quantile=quantile,
+#                             n_samples=min(len(X_low), n_samples),
+#                             random_state=random_state)
+#     if bw <= 0 or not np.isfinite(bw):
+#         raise ValueError(f"Estimated bandwidth is invalid: {bw}")
+
+#     # 6) Run MeanShift (bin_seeding speeds it up)
+#     ms = MeanShift(bandwidth=bw, bin_seeding=True)
+#     labels = ms.fit_predict(X_low)
+#     centers_low = ms.cluster_centers_
     
-    Parameters:
-    - roi_indices (Tensor): 1D tensor of voxel indices for the ROI
-    - voxel_embeddings (Tensor): [num_voxels, embedding_dim]
+#     # 7) Pick the densest cluster (largest membership)
+#     counts = np.bincount(labels)
+#     densest = counts.argmax()
+#     center_low = centers_low[densest]
+
+#     # 8) Map center back to original 256-D space
+#     if pca is not None:
+#         center_orig = pca.inverse_transform(center_low)
+#     else:
+#         center_orig = center_low
     
-    Returns:
-    - float: Average distance from the center of mass
-    """
-    voxels = voxel_embeddings[roi_indices]
-    center_point_dict = {"roi": center_point}
-    distances, _ = infer_distances(voxels, center_point_dict, metric=metric)
-
-    return distances.mean().item()
-    
-
-def infer_by_center_of_mass(predefined_ROI_indices, voxel_embeddings, top_k=None, threshold=None, use_angle=False):
-    if threshold is None and top_k is None:
-        raise ValueError("Either threshold or top_k must be provided.")
-    if threshold is not None and top_k is not None:
-        raise ValueError("Only one of threshold or top_k should be provided.")
-    
-    voxels = voxel_embeddings[predefined_ROI_indices]
-    center_of_mass = voxels.mean(dim=0)
-
-        # compute distances
-    if use_angle:
-        # normalize embeddings and center
-        distances, _ = infer_distances(voxel_embeddings, {'roi': center_of_mass}, metric='cosine')  # [N, 1]
-
-    else:
-        distances = torch.norm(voxel_embeddings - center_of_mass, dim=1)    # Euclidean
-
-    if threshold is not None:
-        inferred_ROI_indices = torch.where(distances < threshold)[0]
-
-    elif top_k is not None:
-        inferred_ROI_indices = torch.topk(distances, k=top_k, dim=0, largest=False).indices
-
-    return inferred_ROI_indices.cpu().numpy()
-
 
 def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
                              voxel_embeddings: torch.Tensor,
+                             metric='eucledian',
+                             with_labels=False,
                              quantile: float = 0.2,
                              n_samples: int = 500) -> torch.Tensor:
     """
     Infer the densest center (mode) of the ROI using Mean-Shift.
 
     Args:
-      predefined_ROI_indices: 1D LongTensor of voxel indices for the ROI
-      voxel_embeddings:      [num_voxels, embedding_dim] FloatTensor
+        predefined_ROI_indices: Tensor of shape [N] with indices of the voxels in the ROI.
+        voxel_embeddings:      N, D] FloatTensor of all voxel embeddings.
+        metric:                euclidean' or 'cosine' - distance metric to use.
+        with_labels:           If true - will return also the voxel labels
+        quantile:              Quantile for bandwidth estimation.
+        n_samples:             Number of samples to use for bandwidth estimation.
 
     Returns:
       center: FloatTensor of shape [embedding_dim], the densest cluster center
     """
 
     # 1) Pull out ROI embeddings as a NumPy array
-    X = voxel_embeddings[predefined_ROI_indices].detach().cpu().numpy()
+    if metric == 'cosine':
+        X = voxel_embeddings[predefined_ROI_indices]
+        X = F.normalize(X, dim=1).detach().cpu().numpy()
+    else:
+        X = voxel_embeddings[predefined_ROI_indices].detach().cpu().numpy()
+
     # 2) Estimate bandwidth (you can tweak quantile)
     bw = estimate_bandwidth(X,
                             quantile=quantile,
@@ -129,29 +153,41 @@ def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
         raise ValueError(f"Bandwidth came out non-positive: {bw}")
 
     # 3) Run Mean-Shift
-    ms = MeanShift(bandwidth=bw, bin_seeding=True, n_jobs=-1)
+    bin_seeding=True
+    if metric == 'cosine': bin_seeding = False
+    ms = MeanShift(bandwidth=bw, bin_seeding=bin_seeding, n_jobs=-1)
     labels = ms.fit_predict(X)
     centers = ms.cluster_centers_
 
     # 4) Find the largest cluster
+    print(labels.shape)
+
     counts = np.bincount(labels)
     best = counts.argmax()
     densest_center = centers[best]
 
     # 5) Convert back to torch, on the same device as voxel_embeddings
     device = voxel_embeddings.device
-    return torch.from_numpy(densest_center).to(device).float()
+
+    if with_labels:
+        return torch.from_numpy(densest_center).to(device).float(), labels
+
+    else:
+        return torch.from_numpy(densest_center).to(device).float()
 
 
 def infer_cosine_distances(voxel_embeddings: torch.Tensor, centers: torch.Tensor, eps=1e-8):
+    # return distances
     device = voxel_embeddings.device
-    # Normalize embeddings and centers
-    centers = centers.to(voxel_embeddings.device)
-    center_norm = centers / centers.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [R, D]
-    emb_norm = voxel_embeddings / voxel_embeddings.norm(dim=1, keepdim=True).clamp_min(min=eps)  # [N, D]
-    # Compute cosine distances
-    cos_sim   = emb_norm @ center_norm.t()
-    distances = (1 - cos_sim).clamp(min=0.0, max=2.0)
+    centers = centers.to(device)
+
+    # Use F.normalize to unit‐length each row, with epsilon for stability
+    emb_norm    = F.normalize(voxel_embeddings, p=2, dim=1, eps=eps)  # [N, D]
+    center_norm = F.normalize(centers,          p=2, dim=1, eps=eps)  # [R, D]
+
+    # Cosine similarity then convert to distance
+    cos_sim   = emb_norm @ center_norm.t()                 # [N, R]
+    distances = (1 - cos_sim).clamp(min=0.0, max=2.0)       # [N, R]
 
     return distances
 
@@ -190,7 +226,7 @@ def assign_voxels_to_rois(voxel_embeddings: torch.Tensor,
 
     return labels, roi_to_indices
 
-class RoiInferConfig:
+class InferRoiCoverageConfig:
     """
     Configuration object for ROI inference.
 
@@ -226,7 +262,7 @@ class RoiInferConfig:
                 )
     
 
-    def infer_roi_dict(self):
+    def infer_roi_coverage(self):
         """The Main function - Infer the ROI indices based on the given configuration.
         """
         self.infer_centers()
@@ -245,7 +281,7 @@ class RoiInferConfig:
                     center_of_mass = voxels.mean(dim=0)
 
                 elif self.center_method == 'meanshift':
-                    center_of_mass = infer_center_by_meanshift(self.predefined_ROI_indices_dict[ROI], self.voxel_embeddings)
+                    center_of_mass = infer_center_by_meanshift(self.predefined_ROI_indices_dict[ROI], self.voxel_embeddings, metric=self.metric)
 
                 else:
                     raise ValueError(f"Unknown center method: {self.center_method}")
@@ -268,6 +304,8 @@ class RoiInferConfig:
         elif self.metric == 'euclidean':
             # Using torch.cdist for Euclidean distance
             distances = torch.cdist(self.voxel_embeddings, center_tensors, p=2)
+        else:
+            raise ValueError(f"Unknown distance metric: {self.metric}")
         return distances
     
 
@@ -301,7 +339,7 @@ class RoiInferConfig:
 
     
 
-def infer_by_avg_distance(inferConfig: RoiInferConfig, distances):
+def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances):
     inferred_indices = {}
     for i, ROI in enumerate(inferConfig.ROI_names):
         predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
@@ -313,7 +351,7 @@ def infer_by_avg_distance(inferConfig: RoiInferConfig, distances):
     return inferred_indices
 
 
-def infer_by_nearest_voxels(inferConfig: RoiInferConfig, distances):
+def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances):
     inferred_indices = {}
 
     for i, ROI in enumerate(inferConfig.ROI_names):

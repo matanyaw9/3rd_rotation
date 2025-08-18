@@ -184,3 +184,60 @@ def plot_rois_center_tsne(roi_config:InferRoiCoverageConfig,
     plt.show()
     return voxel_embeddings_tsne, roi_center_embeddings_tsne
 
+def plot_ROI_overlap_heatmap_percentage(ROI_indices, title, ROIless_indices_amount=None):
+    """
+    Plots a heatmap where each cell[i, j] shows the percentage of ROI_i overlapping with ROI_j.
+    Rows are ROI1, columns are ROI2.
+
+    Parameters:
+    - ROIs: list of ROI names
+    - ROI_indices: dict mapping ROI name -> array of voxel indices
+    - title: title for the plot
+    """
+     # ensure everything is a CPU numpy array
+    for roi in ROI_indices:
+        idx = ROI_indices[roi]
+        if torch.is_tensor(idx):
+            ROI_indices[roi] = idx.cpu().numpy()
+    # Compute ROI sizes
+    ROI_names = list(ROI_indices.keys())
+    roi_sizes = {roi_name: len(ROI_indices[roi_name]) for roi_name in ROI_names}
+
+    # Build overlap percentage matrix
+    n = len(ROI_names)
+    overlap_pct = np.zeros((n, n), dtype=float)
+    for i, roi1 in enumerate(ROI_names):
+        idx1 = ROI_indices[roi1]
+        size1 = roi_sizes[roi1]
+        for j, roi2 in enumerate(ROI_names):
+            idx2 = ROI_indices[roi2]
+            count = np.intersect1d(idx1, idx2).shape[0]
+            overlap_pct[i, j] = (count / size1) * 100 if size1 > 0 else 0.0
+
+    # Prepare labels with sizes
+    xlabels = ROI_names
+    ylabels = [f"{roi}\n(n={roi_sizes[roi]})" for roi in ROI_names]
+
+    # Plot heatmap
+    plt.figure(figsize=(12, 10))
+    sns.set(style="white")
+    ax = sns.heatmap(
+        overlap_pct,
+        annot=True, fmt='.1f', annot_kws={'size':9},
+        cmap='Blues', xticklabels=xlabels, yticklabels=ylabels,
+        cbar_kws={"label": "% of ROI1 overlapping ROI2", "shrink": .75},
+        linewidths=0.5, linecolor='gray'
+    )
+
+     # Annotate number of ROI-less voxels if provided
+    if ROIless_indices_amount is not None:
+        plt.gcf().text(0.99, 0.01, f'Voxels with no assigned ROI: {ROIless_indices_amount}', ha='right', va='bottom', fontsize=10)
+
+
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    plt.title(title, fontsize=14, pad=20)
+    plt.xlabel('ROI2', fontsize=12)
+    plt.ylabel('ROI1', fontsize=12)
+    plt.tight_layout()
+    plt.show()

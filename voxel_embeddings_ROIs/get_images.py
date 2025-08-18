@@ -10,6 +10,9 @@ import torch
 sys.path.append('/home/jonathak/VisualEncoder/Voxels_Prediction')
 from predict_voxels_jonathan import get_images_for_prediction
 
+# sys.path.append('/home/matanyaw/DIP_decoder')
+# from complete_stroke_experiment_predicted_fMRI_ROIs import save_as_png
+
 
 def save_as_png(array, save_path, metadata=None):   
         # 1) Convert torch tensor → numpy
@@ -46,9 +49,12 @@ print("Starts saving images\n")
 
 images = get_images_for_prediction(image_type='excluded', subjects=[1])
 images = images.permute(0, 2, 3, 1)
-image_save_path = '/home/matanyaw/DIP_decoder/excluded_images'
+image_save_path = '/home/matanyaw/DIP_decoder/test_images'
 os.makedirs(image_save_path, exist_ok=True)
-for img_idx, image in enumerate(images):
+
+image_indexes = [1, 2, 3]
+# for img_idx, image in enumerate(images):
+for img_idx in image_indexes:
 
     save_as_png(images[img_idx], f'{image_save_path}/{img_idx}.png')
 

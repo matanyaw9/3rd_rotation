@@ -1,29 +1,43 @@
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import sys
+import os
 from create_full_brain_map import create_full_brain_map
+sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
+import ROI_coverage
+
+roi_to_show = 'FFA-1'
+file_name = f'test_{roi_to_show}'
+SAVE_PATH = '/home/matanyaw/data/matanya_results/html_files/'
+html_file_name = f'{file_name}.html'
 
 # Creating the figure with surface subplots for right/left masks + original image
 
 # Load the voxel maps and choose subject
+# Load the voxel maps and choose subject
+tenzor_directory = '/home/matanyaw/data/roi_coverages_tenzors/'
+tenzor_paths = [os.path.join(tenzor_directory, fname) for fname in os.listdir(tenzor_directory) if fname.endswith('.pt')]
 
-voxel_map_paths = {
-    'original': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/original_voxels.pt',
-    'width_20': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_20_image_mean_voxels.pt',
-    'width_50': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_50_image_mean_voxels.pt',
-    'width_90': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_90_image_mean_voxels.pt',
-}
+# voxel_map_paths = {
+#     'original': f'/home/matanyaw/data/roi_coverages_tenzors/{file_name}.pt',
+#     # 'width_20': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_20_image_mean_voxels.pt',
+#     # 'width_50': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_50_image_mean_voxels.pt',
+#     # 'width_90': '/home/jonathak/VisualEncoder/Results/transformed_voxels_shared_image_mean/gaussian_mask_x0.5_y0.5_width_90_image_mean_voxels.pt',
+# }
 
 sub = 1
 hemispheres = ['lh', 'rh']
 
 # Create the 8 brain map views
-
+roi_names = ROI_coverage.get_roi_names(subject=sub)
+row = roi_names.index(roi_to_show)
 views = []
 
-for voxel_map_path in voxel_map_paths.values():
+# for voxel_map_path in voxel_map_paths.values():
+for voxel_map_path in tenzor_paths[:4]:
     for hemisphere in hemispheres:
-        view = create_full_brain_map(sub, hemisphere, voxel_map_path, transformation_title = None, image_handling = 'mean', engine = 'plotly')
+        view = create_full_brain_map(sub, hemisphere, voxel_map_path, rows=[row] ,transformation_title = None, image_handling = 'mean', engine = 'plotly')
         views.append(view)
 
 # Create the 4x2 subplot grid.
@@ -169,5 +183,7 @@ fig.update_layout(
 )
 
 # Save the figure
-fig.write_html('/home/jonathak/VisualEncoder/Analysis/Brain_maps/gaussian_masks_surfaces_figure.html')
+# fig.write_html('/home/jonathak/VisualEncoder/Analysis/Brain_maps/gaussian_masks_surfaces_figure.html')
+os.makedirs(SAVE_PATH, exist_ok=True)
+fig.write_html(os.path.join(SAVE_PATH, html_file_name))
 

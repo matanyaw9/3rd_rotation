@@ -17,5 +17,5 @@ logs/
 *_results/
 GP-DIP/
 stroke_applying_test/
-
+.vscode
 voxels_for_test_plot/

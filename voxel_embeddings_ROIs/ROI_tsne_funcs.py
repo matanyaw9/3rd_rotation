@@ -6,8 +6,8 @@ from openTSNE import TSNE as OTSNE
 import os
 import sys
 from itertools import cycle
-import ROI_actions
-from ROI_actions import *
+import DIP_decoder.voxel_embeddings_ROIs.ROI_coverage as ROI_coverage
+from DIP_decoder.voxel_embeddings_ROIs.ROI_coverage import *
 
 
 def plot_roi_intersection_tsne(roi1_indices, roi1_name, roi2_indices, roi2_name, voxel_embeddings_tsne):

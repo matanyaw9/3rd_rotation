@@ -41,7 +41,7 @@ stroke_predictor = StrokeVoxelPredictor()
 
 # This is Matanya's config file - just to play with the script
 sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-from ROI_actions import *
+from ROI_coverage import *
 from datetime import timedelta
 import argparse
 from datetime import datetime

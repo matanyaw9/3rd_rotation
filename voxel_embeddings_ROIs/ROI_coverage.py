@@ -8,6 +8,7 @@ import sys
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from scipy.spatial import distance
 
+
 """
 This script creates a file with a dictionary of ROIs and their voxel indices for a given subject.
 """
@@ -22,6 +23,25 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # Appending Roman's path
 sys.path.append('/home/romanb/PycharmProjects/BrainVisualReconst/')
+
+def get_roi_names(subject=1):
+    # Getting ROI indices
+    ROIs_bodies = ['EBA', 'FBA-1', 'FBA-2', 'mTL-bodies']
+    ROIs_faces = ['OFA', 'FFA-1', 'FFA-2', 'mTL-faces', 'aTL-faces']
+    ROIs_places = ['OPA', 'PPA', 'RSC']
+    ROIs_words = ['OWFA', 'VWFA-1', 'VWFA-2', 'mfs-words', 'mTL-words']
+    ROIs_visual = ['V1v', 'V1d', 'V2v', 'V2d', 'V3v', 'V3d', 'hV4']
+
+    ROI_names = ROIs_bodies + ROIs_faces + ROIs_places + ROIs_words + ROIs_visual
+
+    for ROI in ROI_names.copy():
+        roi_indices = get_roi_indices(subject, ROI)
+
+        if roi_indices is None:
+            ROI_names.remove(ROI)
+    return ROI_names
+    
+
 
 
 def summary_roi_coverage(roi_indices, sub_indices):
@@ -59,62 +79,6 @@ def find_voxels_with_no_roi(sub_indices, ROI_indices):
     not_in_any_roi = np.setdiff1d(sub_indices, all_indices_unique)
     
     return not_in_any_roi
-
-
-
-# def densest_mode_center_for_roi(voxel_embeddings, roi_indices,
-#                                 metric='cosine',
-#                                 pca_dims=50,
-#                                 quantile=0.2,
-#                                 n_samples=5000,
-#                                 random_state=42):
-#     """
-#     Returns: (center_np, labels, ms_model)
-#       - center_np: the center (mode) of the densest MeanShift cluster in original 256-D space (np.ndarray)
-#       - labels: cluster labels for ROI points
-#       - ms_model: the fitted MeanShift model (on PCA space) for inspection
-#     """
-#      # 1) Slice ROI
-#     X_t = voxel_embeddings[roi_indices]  # torch [N, 256]
-
-#     # 2) Normalize for cosine if requested
-#     if metric == 'cosine':
-#         X_t = F.normalize(X_t, dim=1)
-
-#     # 3) Move to numpy
-#     X = X_t.detach().cpu().numpy()
-
-#     # 4) (Recommended) PCA to denoise + reduce dimensionality for MeanShift speed/stability
-#     if pca_dims is not None and X.shape[1] > pca_dims:
-#         pca = PCA(n_components=pca_dims, random_state=random_state)
-#         X_low = pca.fit_transform(X)
-#     else:
-#         pca = None
-#         X_low = X
-
-#     # 5) Estimate bandwidth on the reduced space
-#     bw = estimate_bandwidth(X_low,
-#                             quantile=quantile,
-#                             n_samples=min(len(X_low), n_samples),
-#                             random_state=random_state)
-#     if bw <= 0 or not np.isfinite(bw):
-#         raise ValueError(f"Estimated bandwidth is invalid: {bw}")
-
-#     # 6) Run MeanShift (bin_seeding speeds it up)
-#     ms = MeanShift(bandwidth=bw, bin_seeding=True)
-#     labels = ms.fit_predict(X_low)
-#     centers_low = ms.cluster_centers_
-    
-#     # 7) Pick the densest cluster (largest membership)
-#     counts = np.bincount(labels)
-#     densest = counts.argmax()
-#     center_low = centers_low[densest]
-
-#     # 8) Map center back to original 256-D space
-#     if pca is not None:
-#         center_orig = pca.inverse_transform(center_low)
-#     else:
-#         center_orig = center_low
     
 
 def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
@@ -160,8 +124,6 @@ def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
     centers = ms.cluster_centers_
 
     # 4) Find the largest cluster
-    print(labels.shape)
-
     counts = np.bincount(labels)
     best = counts.argmax()
     densest_center = centers[best]
@@ -242,6 +204,7 @@ class InferRoiCoverageConfig:
                  center_method='mean', 
                  metric='euclidean', 
                  discrimination_method='nearest_voxels',
+                 name=None,
                  ):
         self.voxel_embeddings = voxel_embeddings
         self.predefined_ROI_indices_dict = predefined_ROI_indices_dict
@@ -250,10 +213,18 @@ class InferRoiCoverageConfig:
         self.metric = metric
         self.discrimination_method = discrimination_method
         self.ROI_names = list(predefined_ROI_indices_dict.keys())
+
         
         self.roi_centers = None
         self.inferred_ROI_indices_dict = None
         self.ROIless_indices = None
+        self.name = name
+        
+        if discrimination_method == 'predefined':
+            self.inferred_ROI_indices_dict = predefined_ROI_indices_dict
+            self.name = 'predefined'
+        if self.name is None:
+            self.make_default_name()
 
     def __repr__(self):
         return (f"RoiInferConfig(center_method={self.center_method}, "
@@ -262,12 +233,33 @@ class InferRoiCoverageConfig:
                 )
     
 
+    def make_default_name(self):
+        """This name will be used for storing in a file"""
+        name = ''
+        if self.center_method=='meanshift':
+            name += 'ms'
+        else:
+            name += self.center_method
+        name += '_'
+        if self.metric == 'euclidean':
+            name += 'euc'
+        elif self.metric == 'cosine':
+            name += 'cos'
+        else: 
+            name += self.metric
+        name += '_'
+        name += self.discrimination_method
+        self.name = name
+        
+
     def infer_roi_coverage(self):
         """The Main function - Infer the ROI indices based on the given configuration.
+        Will only work if the discrimination method is not the 'predefined'.
         """
-        self.infer_centers()
-        distances = self.infer_distances()
-        self.infer_roi_indices(distances)
+        if not self.discrimination_method == 'predefined':
+            self.infer_centers()
+            distances = self.infer_distances()
+            self.infer_roi_indices(distances)
         return self.inferred_ROI_indices_dict
 
     
@@ -337,28 +329,57 @@ class InferRoiCoverageConfig:
     def infer_roiless_indices(self, sub_indices):
         self.ROIless_indices = find_voxels_with_no_roi(sub_indices, self.inferred_ROI_indices_dict)
 
+
+    def save_into_tezor(self, save_path):
+        """This function is to save the information of which voxels belong to which ROI as a tenzor of 20 X 40K cells, binary.
+        0 if the voxel is not in the ROI and 1 if it is. """
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+
+        # Create a binary tensor of shape [N, R] where N is the number of voxels and R is the number of ROIs
+        num_voxels = self.voxel_embeddings.shape[0]
+        num_rois = len(self.ROI_names)
+        roi_tensor = torch.zeros((num_rois, num_voxels), dtype=torch.int8)
+
+        for i, roi_name in enumerate(self.ROI_names):
+            indices = self.inferred_ROI_indices_dict[roi_name]
+            roi_tensor[i, indices] = 1
+
+        # Save the tensor to a file
+        if os.path.isdir(save_path):
+            save_path = os.path.join(save_path, self.name + '.pt')
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        torch.save(roi_tensor, save_path)
+        
+        return roi_tensor
     
 
-def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances):
+def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances, print_info=False):
     inferred_indices = {}
     for i, ROI in enumerate(inferConfig.ROI_names):
         predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
         avg_dist = distances[predifined_indices, i].mean()
-        print(f"Average distance for ROI '{ROI}': {avg_dist:.4f}")
+        if print_info:
+            print(f"Average distance for ROI '{ROI}': {avg_dist:.4f}")
         mask = distances[:, i] < avg_dist
         chosen = torch.where(mask)[0]
         inferred_indices[ROI] = chosen.cpu().numpy()
     return inferred_indices
 
 
-def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances):
+def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances, k=None):
+    """Every center claims the k nearest voxels to himself. 
+    Multiple centers can claim the same voxel. If no K is given, by default k will be the ROI size."""
     inferred_indices = {}
 
     for i, ROI in enumerate(inferConfig.ROI_names):
         predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
         roi_size = len(predifined_indices)
+        if k is None:
+            k = roi_size
         relevant_distances = distances[:, i]
-        inferred_indices[ROI] = torch.topk(relevant_distances, k=roi_size, dim=0, largest=False).indices.cpu().numpy()
+        inferred_indices[ROI] = torch.topk(relevant_distances, k=k, dim=0, largest=False).indices.cpu().numpy()
     return inferred_indices
+
 
         

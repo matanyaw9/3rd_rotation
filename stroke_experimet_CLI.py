@@ -7,7 +7,7 @@ import requests
 import torch
 import complete_stroke_experiment_predicted_fMRI_ROIs
 sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-from ROI_actions import *
+from ROI_coverage import *
 
 
 def argparse_args():
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     start_time = time.time()
     args = argparse_args()
     current_date = datetime.now().strftime("%y_%m_%d")
-    default_save_path = f'/home/matanyaw/DIP_decoder/matanya_results/results_{current_date}'
+    default_save_path = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
     if args.save_path is None:
         save_path = default_save_path
     else:

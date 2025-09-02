@@ -41,6 +41,7 @@ stroke_predictor = StrokeVoxelPredictor()
 
 # This is Matanya's config file - just to play with the script
 sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
+import ROI_coverage
 from ROI_coverage import *
 from datetime import timedelta
 import argparse
@@ -138,37 +139,34 @@ def run_experiment(args_config):
         else:
             predefined_ROI_indices_dict[ROI] = roi_indices
         
-    roi_infer_configs = {
-        'mean-euc-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
-                                                        center_method='mean', 
-                                                        metric='euclidean', 
-                                                        discrimination_method='nearest_voxels',),
+    roi_coverage_configs = []
 
-        'mean-cos-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
-                                                        center_method='mean', 
-                                                        metric='cosine', 
-                                                        discrimination_method='nearest_voxels',),
-                                                        
-        'ms-euc-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
-                                                        center_method='meanshift', 
-                                                        metric='euclidean', 
-                                                        discrimination_method='nearest_voxels',),
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='mean', metric='euclidean', discrimination_method='predefined'))
 
-        'ms-cos-nearest': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
-                                                center_method='meanshift', 
-                                                metric='cosine', 
-                                                discrimination_method='nearest_voxels',),  
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='mean', metric='euclidean', discrimination_method='nearest_voxels'))
 
-       'ms-euc-n_cntr': InferRoiCoverageConfig(voxel_embeddings, predefined_ROI_indices_dict,
-                                                        center_method='meanshift', 
-                                                        metric='euclidean', 
-                                                        discrimination_method='nearest_center',),                                                 
-    }
-    if args_config['modify_roi']:
-        for config in roi_infer_configs.values():
-            config.infer_roi_coverage()
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='mean', metric='cosine', discrimination_method='nearest_voxels'))
+
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='meanshift', metric='euclidean', discrimination_method='nearest_voxels'))
 
 
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='meanshift', metric='cosine', discrimination_method='nearest_voxels'))
+
+
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='meanshift', metric='euclidean', discrimination_method='nearest_center'))
+
+    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+                                                                    center_method='meanshift', metric='cosine', discrimination_method='nearest_center'))
+
+
+    for config in roi_coverage_configs:
+        config.infer_roi_coverage()
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
 
     inds_nc = np.where(NC[inds]>0.5)[0]
@@ -450,18 +448,17 @@ def run_experiment(args_config):
         print(f'\nStarting the ROIs loop for image {img_idx}...\n')
         
         for ROI in ROI_names:
+            # This dictionary is generated for each ROI, containing the relevant voxels according to each ROI coverage inferring method. 
             mega_roi_dict = dict()
 
-            mega_roi_dict['Predefined_ROI'] = predefined_ROI_indices_dict[ROI]
+            # mega_roi_dict['Predefined_ROI'] = predefined_ROI_indices_dict[ROI]
 
-            if args_config['modify_roi']:
-                for roi_infer_name, config in roi_infer_configs.items():
-                    print(f'Inferring ROI {ROI} with config: {roi_infer_name}')
-                    mega_roi_dict[roi_infer_name] = config.inferred_ROI_indices_dict[ROI]
+            for config in roi_coverage_configs:
+                print(f'Inferring ROI {ROI} with config: {config.name}')
+                mega_roi_dict[config.name] = config.inferred_ROI_indices_dict[ROI]
             
             roi_path = f'{image_save_path}/roi_{ROI}'
-            if not os.path.exists(roi_path):
-                os.makedirs(roi_path, exist_ok=True)
+            os.makedirs(roi_path, exist_ok=True)
             
             stroke_target_all = original_target_all.clone().detach()
             

@@ -367,7 +367,7 @@ def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances, print_
     return inferred_indices
 
 
-def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances, k=None):
+def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances, num_of_voxels=None):
     """Every center claims the k nearest voxels to himself. 
     Multiple centers can claim the same voxel. If no K is given, by default k will be the ROI size."""
     inferred_indices = {}
@@ -375,8 +375,10 @@ def infer_by_nearest_voxels(inferConfig: InferRoiCoverageConfig, distances, k=No
     for i, ROI in enumerate(inferConfig.ROI_names):
         predifined_indices = inferConfig.predefined_ROI_indices_dict[ROI]
         roi_size = len(predifined_indices)
-        if k is None:
+        if num_of_voxels is None:
             k = roi_size
+        else: 
+            k = num_of_voxels
         relevant_distances = distances[:, i]
         inferred_indices[ROI] = torch.topk(relevant_distances, k=k, dim=0, largest=False).indices.cpu().numpy()
     return inferred_indices

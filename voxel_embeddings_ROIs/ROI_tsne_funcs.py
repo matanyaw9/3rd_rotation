@@ -3,11 +3,12 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from openTSNE import TSNE as OTSNE
 
+import seaborn as sns
 import os
 import sys
 from itertools import cycle
-import DIP_decoder.voxel_embeddings_ROIs.ROI_coverage as ROI_coverage
-from DIP_decoder.voxel_embeddings_ROIs.ROI_coverage import *
+import ROI_coverage
+from ROI_coverage import *
 
 
 def plot_roi_intersection_tsne(roi1_indices, roi1_name, roi2_indices, roi2_name, voxel_embeddings_tsne):

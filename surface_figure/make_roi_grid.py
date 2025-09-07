@@ -13,6 +13,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import torch
+import datetime
 
 # Project imports
 sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
@@ -166,8 +167,9 @@ def main():
                         help="Directory containing .pt files")
     parser.add_argument("--subject", type=int, default=1, choices=[1, 2],
                         help="Subject index (default: 1)")
-    parser.add_argument("--output", default=None,
-                        help="Directory where HTML will be saved")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    parser.add_argument("--output", default=f"/home/matanyaw/DIP_decoder/data/matanya_results/html_files_{timestamp}",
+                        help="Directory where HTML will be saved (default: timestamped)")
     parser.add_argument("--title", default=None,
                         help="Figure title (default: auto)")
     parser.add_argument("--show_colorbar", action="store_true",

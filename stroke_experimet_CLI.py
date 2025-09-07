@@ -23,8 +23,6 @@ def argparse_args():
                         help='Type of images to use in the experiment (e.g., "shared", "excluded").')
     parser.add_argument('--images_indices', type=int, nargs='+', default=[1, 4],
                         help='List of image indices to process in the experiment.')
-    parser.add_argument('--modify_roi', action='store_true',
-                        help='Whether to modify the ROI during the experiment.')
     parser.add_argument('--save_throughout', action='store_true',
                         help='Whether to save intermediate results throughout the experiment.')
     parser.add_argument('--roi_to_process', type=str, nargs='+', default=None,
@@ -72,7 +70,6 @@ if __name__ == "__main__":
         'save_path': save_path,  # Root path to save results
         'steps_to_do': args.steps_to_do,  # List of steps to perform in the experiment
         'image_type': args.image_type,  # Type of images to use in the experiment
-        'modify_roi': args.modify_roi,  # Whether to modify the ROI during the experiment
         'run': args.run,  # Name of the run for saving results
         'save_throughout': args.save_throughout,
         'roi_to_process': args.roi_to_process,  # List of specific ROIs to process

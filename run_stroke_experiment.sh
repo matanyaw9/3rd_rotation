@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=test_deletes_2
-#SBATCH --output=logs/%j_test_deletes_2.out
+#SBATCH --job-name=without_face
+#SBATCH --output=logs/%j_without_face.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,14 +17,14 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="test_deletes_2"
+RUN_NAME="without_face"
 
 # Launch the script with required arguments
 echo "Running python script"
 srun python -u stroke_experimet_CLI.py \
     --run "$RUN_NAME" \
     --image_type shared \
-    --images_indices 29 51 65 69 99 \
+    --images_indices 280 \
     --modify_roi \
     --create_montage \
     --steps_to_do 1 2 4 \
@@ -38,3 +38,6 @@ srun python -u stroke_experimet_CLI.py \
 
 # images_indices = np.sort(np.array([1, 5, 6, 9, 12, 13, 14, 22, 28, 27, 66, 69, 39, 109, 56, 44])) # For excluded
 # images_indices = np.sort(np.array([1, 4, 7, 9, 15, 16, 18, 20, 21, 29, 51, 65, 69, 96, 99])) # For shared
+
+# face images shared: 16 18 20 21 88 116 118 124 158 135 188 218 254 275 364 366
+# non face images shared: 3 5 6 8 10 17 30 33 37 60 61 63 80 81 82 271 280 338 403 404

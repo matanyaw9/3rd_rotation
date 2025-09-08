@@ -126,7 +126,15 @@ def create_single_html_file(args, roi_idx: int, roi_name: str):
              text="Right hemisphere", showarrow=False, font=dict(size=18)),
     ])
 
+    # Extract roi sizes from each .pt file
+    roi_sizes = {}
+    for path in pt_files:
+        tenzor = torch.load(path)
+        row_sum = tenzor[roi_idx].sum()
+        roi_sizes[path] = row_sum
+
     # Row labels
+    # ! add here the roi size and avg SNR
     label_x = label_frac / 2.0
     row_labels = [
         dict(
@@ -134,7 +142,7 @@ def create_single_html_file(args, roi_idx: int, roi_name: str):
             y=1.0 - (r - 0.5) / n_rows,
             xref="paper", yref="paper",
             xanchor="center", yanchor="middle",
-            text=os.path.splitext(os.path.basename(path))[0],
+            text=f'{os.path.splitext(os.path.basename(path))[0]}\nROI size: {roi_sizes[path]}',
             showarrow=False, font=dict(size=14),
         )
         for r, path in enumerate(pt_files, start=1)

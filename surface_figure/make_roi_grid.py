@@ -9,7 +9,6 @@ import os
 import sys
 from typing import List, Tuple
 
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import torch
@@ -21,14 +20,13 @@ import ROI_coverage  # noqa: E402
 from create_full_brain_map import create_full_brain_map  # noqa: E402
 
 
-def list_pt_files(directory: str) -> List[str]:
+def list_pkl_files(directory: str) -> List[str]:
     """
     Return a sorted list of .pt file paths in a directory.
     Predefined files (containing 'predefined' in the name) come first.
     """
-    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pt')]
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pkl')]
     return sorted(files, key=lambda f: (0 if "predefined" in os.path.basename(f) else 1, f))
-
 
 def scene_name_for(rc: Tuple[int, int]) -> str:
     """Return subplot scene key ('scene', 'scene2', ...) for (row, col)."""
@@ -37,24 +35,25 @@ def scene_name_for(rc: Tuple[int, int]) -> str:
     return "scene" if idx == 1 else f"scene{idx}"
 
 
-def create_single_html_file(args, roi_idx: int, roi_name: str):
+def create_single_html_file(args, roi_name: str):
     """Generate and save a grid of meshes for a single ROI across all .pt files."""
-    pt_files = list_pt_files(args.tenzor_dir)
-    if not pt_files:
-        raise FileNotFoundError(f"No .pt files found in: {args.tenzor_dir}")
+    pkl_files = list_pkl_files(args.roi_dir)
+    if not pkl_files:
+        raise FileNotFoundError(f"No .pkl files found in: {args.roi_dir}")
 
     hemispheres = ["lh", "rh"]
-    n_rows, n_cols = len(pt_files), 2
+    n_rows, n_cols = len(pkl_files), 2
+
+    roi_coverages = [ROI_coverage.InferRoiCoverageConfig.load(file) for file in pkl_files]
 
     # Build views: for each file × hemisphere
     views: List[go.Mesh3d] = []
-    for voxel_map_path in pt_files:
+    for roi_cov in roi_coverages:
         for hemisphere in hemispheres:
             mesh = create_full_brain_map(
                 sub=args.subject,
                 hemisphere=hemisphere,
-                voxel_map_path=voxel_map_path,
-                rows=[roi_idx],
+                voxels=roi_cov.into_numpy(roi_name),
                 transformation_title=None,
                 image_handling="mean",
                 engine="plotly",
@@ -126,15 +125,7 @@ def create_single_html_file(args, roi_idx: int, roi_name: str):
              text="Right hemisphere", showarrow=False, font=dict(size=18)),
     ])
 
-    # Extract roi sizes from each .pt file
-    roi_sizes = {}
-    for path in pt_files:
-        tenzor = torch.load(path)
-        row_sum = tenzor[roi_idx].sum()
-        roi_sizes[path] = row_sum
-
-    # Row labels
-    # ! add here the roi size and avg SNR
+    # ! add here the roi avg SNR
     label_x = label_frac / 2.0
     row_labels = [
         dict(
@@ -142,10 +133,10 @@ def create_single_html_file(args, roi_idx: int, roi_name: str):
             y=1.0 - (r - 0.5) / n_rows,
             xref="paper", yref="paper",
             xanchor="center", yanchor="middle",
-            text=f'{os.path.splitext(os.path.basename(path))[0]}\nROI size: {roi_sizes[path]}',
+            text=f'{roi_cov.name}\tROI size: {roi_cov.get_roi_size(roi_name)}',
             showarrow=False, font=dict(size=14),
         )
-        for r, path in enumerate(pt_files, start=1)
+        for r, roi_cov in enumerate(roi_coverages, start=1)
     ]
     fig.update_layout(annotations=(fig.layout.annotations or []) + tuple(row_labels))
 
@@ -171,8 +162,8 @@ def main():
     )
     parser.add_argument("--roi_name", default="all",
                         help="ROI name to visualize (default: all ROIs)")
-    parser.add_argument("--tenzor_dir", default="/home/matanyaw/data/roi_coverages_tenzors",
-                        help="Directory containing .pt files")
+    parser.add_argument("--roi_dir", default="/home/matanyaw/data/roi_coverages",
+                        help="Directory containing .pkl files of the ROI coverages")
     parser.add_argument("--subject", type=int, default=1, choices=[1, 2],
                         help="Subject index (default: 1)")
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -199,8 +190,7 @@ def main():
                          f"Available: {', '.join(roi_names)} or 'all'")
 
     for roi_name in rois_to_plot:
-        roi_idx = roi_names.index(roi_name)
-        create_single_html_file(args, roi_idx, roi_name)
+        create_single_html_file(args, roi_name)
 
 
 if __name__ == "__main__":

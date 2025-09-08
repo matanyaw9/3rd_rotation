@@ -12,7 +12,7 @@ roi_colorscale = [
 
 
 
-def create_full_brain_map(sub, hemisphere, voxel_map_path, transformation_title, rows = None, image_handling = 'mean', engine = 'plotly'):
+def create_full_brain_map(sub, hemisphere, voxels, transformation_title, image_handling = 'mean', engine = 'plotly'):
     '''
     Create a brain map of all voxels for a given hemisphere of a given subject (1 or 2)
     '''
@@ -33,14 +33,6 @@ def create_full_brain_map(sub, hemisphere, voxel_map_path, transformation_title,
     # Create an argObj object for the subject
 
     args = argObj(data_dir, parent_submission_dir, sub)
-    
-    # Load the voxel ativation map
-    # I used rows to specify which ROI is highlighted
-    if rows:
-        voxels = torch.load(voxel_map_path).numpy()[rows, :]
-    else: 
-        voxels = torch.load(voxel_map_path).numpy()
-        # voxels = torch.load(voxel_map_path)
     
     # Take only the voxels that are in the hemisphere
     start_idx, end_idx = get_hemisphere_indices(sub, hemisphere)

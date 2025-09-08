@@ -43,8 +43,6 @@ def get_roi_names(subject=1):
     return ROI_names
     
 
-
-
 def summary_roi_coverage(roi_indices, sub_indices):
     # turn sub_indices into a 1D numpy array
     if isinstance(sub_indices, torch.Tensor):
@@ -295,7 +293,6 @@ class InferRoiCoverageConfig:
         return inferred_centers
 
 
-
     def infer_distances(self):
         """
         Infer distances from voxel embeddings to the centers of all ROIs.
@@ -347,40 +344,18 @@ class InferRoiCoverageConfig:
         if ROI not in self.ROI_names:
             raise ValueError(f"{ROI} is not a known ROI.")
         return len(self.inferred_ROI_indices_dict[ROI])
-
-    def save_into_tezor(self, save_path):
-        """This function is to save the information of which voxels belong to which ROI as a tenzor of 20 X 40K cells, binary.
-        0 if the voxel is not in the ROI and 1 if it is. """
-        if self.inferred_ROI_indices_dict is None:
-            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
-
-        # Create a binary tensor of shape [N, R] where N is the number of voxels and R is the number of ROIs
-        num_voxels = self.voxel_embeddings.shape[0]
-        num_rois = len(self.ROI_names)
-        roi_tensor = torch.zeros((num_rois, num_voxels), dtype=torch.int8)
-
-        for i, roi_name in enumerate(self.ROI_names):
-            indices = self.inferred_ROI_indices_dict[roi_name]
-            roi_tensor[i, indices] = 1
-
-        # Save the tensor to a file
-        if os.path.isdir(save_path):
-            save_path = os.path.join(save_path, self.name + '.pt')
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        torch.save(roi_tensor, save_path)
-        
-        return roi_tensor
     
-    def into_tenzor(self, ROIs=None):
+    
+    def into_numpy(self, ROIs=None):
         """
-        Converts the inferred ROI indices into a tensor representation.
-        This function creates a tensor where each row corresponds to a specified ROI and each column corresponds to a voxel.
-        The tensor contains 1s at positions where a voxel belongs to the ROI, and 0s elsewhere.
+        Converts the inferred ROI indices into a numpy array representation.
+        This function creates an array where each row corresponds to a specified ROI and each column corresponds to a voxel.
+        The array contains 1s at positions where a voxel belongs to the ROI, and 0s elsewhere.
         Args:
-            ROIs (list or str, optional): List of ROI names or a single ROI name to include in the tensor.
+            ROIs (list or str, optional): List of ROI names or a single ROI name to include in the array.
                 If None, all known ROIs are used.
         Returns:
-            torch.Tensor: A tensor of shape (num_rois, num_voxels) with binary values indicating voxel membership in each ROI.
+            np.ndarray: An array of shape (num_rois, num_voxels) with binary values indicating voxel membership in each ROI.
         """
 
         if self.inferred_ROI_indices_dict is None:
@@ -395,13 +370,12 @@ class InferRoiCoverageConfig:
                 raise ValueError(f"{roi} is not a known ROI.")
         num_voxels = self.voxel_embeddings.shape[0]
         num_rois = len(ROIs)
-        roi_tensor = torch.zeros((num_rois, num_voxels), dtype=torch.int8)
+        roi_array = np.zeros((num_rois, num_voxels), dtype=np.int8)
 
         for i, roi_name in enumerate(ROIs):
             indices = self.inferred_ROI_indices_dict[roi_name]
-            roi_tensor[i, indices] = 1
-        return roi_tensor
-        
+            roi_array[i, indices] = 1
+        return roi_array
 
     
 

@@ -16,6 +16,7 @@ This script creates a file with a dictionary of ROIs and their voxel indices for
 # Getting my modules
 sys.path.append('/home/jonathak/VisualEncoder/Analysis/Brain_maps')
 from NIPS_utils import get_hemisphere_indices, get_roi_indices, get_roi_indices_per_hemisphere
+import pickle
 
 
 # Setting up GPU
@@ -251,6 +252,17 @@ class InferRoiCoverageConfig:
         name += self.discrimination_method
         self.name = name
         
+    def save(self, path):
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(path):
+        with open(path, 'rb') as f:
+            obj = pickle.load(f)
+        if not isinstance(obj, InferRoiCoverageConfig):
+            raise TypeError("Loaded object is not an InferRoiCoverageConfig instance.")
+        return obj
 
     def infer_roi_coverage(self):
         """The Main function - Infer the ROI indices based on the given configuration.
@@ -329,6 +341,12 @@ class InferRoiCoverageConfig:
     def infer_roiless_indices(self, sub_indices):
         self.ROIless_indices = find_voxels_with_no_roi(sub_indices, self.inferred_ROI_indices_dict)
 
+    def get_roi_size(self, ROI):
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        if ROI not in self.ROI_names:
+            raise ValueError(f"{ROI} is not a known ROI.")
+        return len(self.inferred_ROI_indices_dict[ROI])
 
     def save_into_tezor(self, save_path):
         """This function is to save the information of which voxels belong to which ROI as a tenzor of 20 X 40K cells, binary.
@@ -352,6 +370,39 @@ class InferRoiCoverageConfig:
         torch.save(roi_tensor, save_path)
         
         return roi_tensor
+    
+    def into_tenzor(self, ROIs=None):
+        """
+        Converts the inferred ROI indices into a tensor representation.
+        This function creates a tensor where each row corresponds to a specified ROI and each column corresponds to a voxel.
+        The tensor contains 1s at positions where a voxel belongs to the ROI, and 0s elsewhere.
+        Args:
+            ROIs (list or str, optional): List of ROI names or a single ROI name to include in the tensor.
+                If None, all known ROIs are used.
+        Returns:
+            torch.Tensor: A tensor of shape (num_rois, num_voxels) with binary values indicating voxel membership in each ROI.
+        """
+
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        if ROIs is None:
+            ROIs = self.ROI_names
+        elif isinstance(ROIs, str):
+            ROIs = [ROIs]
+        
+        for roi in ROIs:
+            if roi not in self.ROI_names:
+                raise ValueError(f"{roi} is not a known ROI.")
+        num_voxels = self.voxel_embeddings.shape[0]
+        num_rois = len(ROIs)
+        roi_tensor = torch.zeros((num_rois, num_voxels), dtype=torch.int8)
+
+        for i, roi_name in enumerate(ROIs):
+            indices = self.inferred_ROI_indices_dict[roi_name]
+            roi_tensor[i, indices] = 1
+        return roi_tensor
+        
+
     
 
 def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances, print_info=False):

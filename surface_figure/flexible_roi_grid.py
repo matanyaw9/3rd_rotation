@@ -28,22 +28,17 @@ sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
 import ROI_coverage  # noqa: E402
 from create_full_brain_map import create_full_brain_map  # noqa: E402
 
-
-# =========================
-# HELPER: file discovery
-# =========================
-def list_pkl_files(directory: str) -> List[str]:
-    """
-    Return a sorted list of .pkl file paths in a directory.
-    'predefined' files are placed first.
-    """
-    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pkl')]
-    return sorted(files, key=lambda f: (0 if "predefined" in os.path.basename(f) else 1, f))
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+RESULTS_DIR = '/home/matanyaw/DIP_decoder/data/matanya_results'
 
 
 # =========================
 # EDITOR ZONE
 # =========================
+OUTPUT_DIR_NAME = f'html_files_{timestamp}'
+# OUTPUT_DIR_NAME = f'nearest_voxels_vs_nearest_center'
+
+
 # Choose ONE of the two modes: "manual" or "auto"
 
 GRID_MODE = "manual"  # "manual" or "auto"
@@ -61,18 +56,57 @@ GRID_MODE = "manual"  # "manual" or "auto"
 #   [ {"file_contains": "nearest_voxels", "hemi": "lh"},
 #     {"file_contains": "nearest_voxels", "hemi": "rh"} ],
 # ]
+# MANUAL_GRID: List[List[Dict[str, Any]]] = [
+#     # Row 1
+#     [
+#         {"file_contains": "predefined", "hemi": "lh", "label": "Predefined · LH"},
+#         {"file_contains": "predefined", "hemi": "rh", "label": "Predefined · RH"},
+#     ],
+#     # Row 2
+#     [
+#         {"file_contains": "nearest_voxels", "hemi": "lh", "label": "Nearest · LH"},
+#         {"file_contains": "nearest_voxels", "hemi": "rh", "label": "Nearest · RH"},
+#     ],
+# ]
+
+# # Comparing Different Metrics:
+# MANUAL_GRID: List[List[Dict[str, Any]]] = [
+#     # Row 1
+#     [
+#         {"file_contains": "predefined", "hemi": "lh", "label": "Predefined · LH"},
+#         # {"file_contains": "predefined", "hemi": "rh", "label": "Predefined · RH"},
+#     ],
+#     # Row 2
+#     [
+#         {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Mean Cos NV · LH"},
+#         {"file_equals": "mean_euc_nearest_voxels.pkl", "hemi": "lh", "label": "Mean Euc NV  · LH"},
+#     ],
+#     # Row 3 
+#     [
+#         {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Meanshift Cos NV · LH"},
+#         {"file_equals": "ms_euc_nearest_voxels.pkl", "hemi": "lh", "label": "Meanshift Euc NV  · LH"},
+#     ],
+#     # Row 4
+#     [
+#         {"file_equals": "ms_cos_nearest_center.pkl", "hemi": "lh", "label": "Meanshift Cos NC · LH"},
+#         {"file_equals": "ms_euc_nearest_center.pkl", "hemi": "lh", "label": "Meanshift Euc NC  · LH"},
+#     ],
+# ]
+
+# Nearest Voxel VS Nearest Center
 MANUAL_GRID: List[List[Dict[str, Any]]] = [
     # Row 1
     [
         {"file_contains": "predefined", "hemi": "lh", "label": "Predefined · LH"},
-        {"file_contains": "predefined", "hemi": "rh", "label": "Predefined · RH"},
+        {"file_contains": "ms_cos_nearest_center.pkl", "hemi": "lh", "label": "Meanshift Cos NC · LH"},
     ],
     # Row 2
     [
-        {"file_contains": "nearest_voxels", "hemi": "lh", "label": "Nearest · LH"},
-        {"file_contains": "nearest_voxels", "hemi": "rh", "label": "Nearest · RH"},
+        {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Mean Cos NV · LH"},
+        {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Meanshift Cos NV  · LH"},
     ],
 ]
+
 
 # ---- Auto mode ----
 # If GRID_MODE == "auto", we:
@@ -98,6 +132,15 @@ C_MIN, C_MAX = 0, 1
 # =========================
 # END EDITOR ZONE
 # =========================
+
+# HELPER: file discovery
+def list_pkl_files(directory: str) -> List[str]:
+    """
+    Return a sorted list of .pkl file paths in a directory.
+    'predefined' files are placed first.
+    """
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pkl')]
+    return sorted(files, key=lambda f: (0 if "predefined" in os.path.basename(f) else 1, f))
 
 
 def scene_key_for(row: int, col: int, n_cols: int) -> str:
@@ -348,8 +391,8 @@ def main():
                         help="Directory containing .pkl files of the ROI coverages")
     parser.add_argument("--subject", type=int, default=1, choices=[1, 2],
                         help="Subject index (default: 1)")
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    parser.add_argument("--output", default=f"/home/matanyaw/DIP_decoder/data/matanya_results/html_files_{timestamp}",
+    DEFAULT_OUTPUT_DIR = os.path.join(RESULTS_DIR, OUTPUT_DIR_NAME)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_DIR,
                         help="Directory where HTML will be saved (default: timestamped)")
     parser.add_argument("--title", default=None,
                         help="Figure title (default: auto)")

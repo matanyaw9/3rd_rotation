@@ -7,8 +7,8 @@ import seaborn as sns
 import os
 import sys
 from itertools import cycle
-import ROI_coverage
-from ROI_coverage import *
+from . import ROI_coverage
+from .ROI_coverage import *
 
 
 def plot_roi_intersection_tsne(roi1_indices, roi1_name, roi2_indices, roi2_name, voxel_embeddings_tsne):

@@ -4,8 +4,7 @@ from plotly.subplots import make_subplots
 import sys
 import os
 from create_full_brain_map import create_full_brain_map
-sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-import ROI_coverage
+from ..voxel_embeddings_ROIs import ROI_coverage
 
 roi_to_show = 'FFA-1'
 file_name = f'test_{roi_to_show}'

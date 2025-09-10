@@ -25,6 +25,9 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 # Appending Roman's path
 sys.path.append('/home/romanb/PycharmProjects/BrainVisualReconst/')
 
+NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
+
+
 def get_roi_names(subject=1):
     # Getting ROI indices
     ROIs_bodies = ['EBA', 'FBA-1', 'FBA-2', 'mTL-bodies']
@@ -200,6 +203,7 @@ class InferRoiCoverageConfig:
     def __init__(self, 
                  voxel_embeddings: torch.Tensor,
                  predefined_ROI_indices_dict: dict,
+                 subject:int=1,
                  center_method='mean', 
                  metric='euclidean', 
                  discrimination_method='nearest_voxels',
@@ -207,7 +211,10 @@ class InferRoiCoverageConfig:
                  ):
         self.voxel_embeddings = voxel_embeddings
         self.predefined_ROI_indices_dict = predefined_ROI_indices_dict
+        self.subject = subject
 
+        self.lh_start, self.lh_end = get_hemisphere_indices(subject, 'lh')
+        self.rh_start, self.rh_end = get_hemisphere_indices(subject, 'rh') 
         self.center_method = center_method
         self.metric = metric
         self.discrimination_method = discrimination_method
@@ -216,7 +223,6 @@ class InferRoiCoverageConfig:
         
         self.roi_centers = None
         self.inferred_ROI_indices_dict = None
-        self.ROIless_indices = None
         self.name = name
         
         if discrimination_method == 'predefined':
@@ -231,6 +237,8 @@ class InferRoiCoverageConfig:
                 f"discrimination_method={self.discrimination_method}, "
                 )
     
+    def sub_indices(self):
+        return np.arange(self.lh_start, self.rh_end)
 
     def make_default_name(self):
         """This name will be used for storing in a file"""
@@ -335,8 +343,14 @@ class InferRoiCoverageConfig:
         self.inferred_ROI_indices_dict = inferred_ROI_indices
         return inferred_ROI_indices
     
-    def infer_roiless_indices(self, sub_indices):
-        self.ROIless_indices = find_voxels_with_no_roi(sub_indices, self.inferred_ROI_indices_dict)
+    def get_roiless_indices(self):
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        all_indices = np.concatenate(list(self.inferred_ROI_indices_dict.values()))
+        all_indices_unique = np.unique(all_indices)
+        roi_less = np.setdiff1d(self.sub_indices(), all_indices_unique)
+        return roi_less
+    
 
     def get_roi_size(self, ROI):
         if self.inferred_ROI_indices_dict is None:
@@ -346,6 +360,30 @@ class InferRoiCoverageConfig:
         return len(self.inferred_ROI_indices_dict[ROI])
     
     
+    def get_label(self):
+        if self.name == 'predefined':
+            return 'Predefined'
+        acronym = lambda words: ''.join([word[0].upper() for word in words.split('_')])
+        label = self.center_method.capitalize() + ' '
+        label += self.metric[:3].capitalize() + ' '
+        label += acronym(self.discrimination_method) 
+        return label
+
+    def get_avg_SNR(self, roi_name:str='all', ndigits=3):
+        """Returns the average Signal to Noise Ratio for ROI assigned voxels."""
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        if roi_name not in self.ROI_names + ['all']:
+            raise ValueError(f'{roi_name} is not in ROI_names! Try: {", ".join(["all"] + self.ROI_names)}')
+        
+        nc = NC[self.sub_indices()]
+        if roi_name in self.ROI_names:
+            indices = self.inferred_ROI_indices_dict[roi_name]
+        elif roi_name == 'all':
+            indices = np.concatenate(list(self.inferred_ROI_indices_dict.values()))
+        return round(np.average(nc[indices]), ndigits)
+        
+
     def into_numpy(self, ROIs=None):
         """
         Converts the inferred ROI indices into a numpy array representation.

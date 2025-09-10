@@ -3,8 +3,8 @@
 from __future__ import print_function
 import warnings
 warnings.filterwarnings("ignore")
-import matplotlib
-import matplotlib.pyplot as plt
+# import matplotlib
+# import matplotlib.pyplot as plt
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
@@ -12,13 +12,13 @@ sys.path.append('/home/jonathak/VisualEncoder/DIP_decoder/GP-DIP/')
 import numpy as np
 from models import *
 import torch
-import torch.optim
+# import torch.optim
 import torch.nn.functional as F
-import random
+# import random
 import time
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from utils.denoising_utils import *
-import _pickle as cPickle
+# import _pickle as cPickle
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark =True
 dtype = torch.cuda.FloatTensor
@@ -40,13 +40,10 @@ from create_stroke_fMRI import StrokeVoxelPredictor
 stroke_predictor = StrokeVoxelPredictor()
 
 # This is Matanya's config file - just to play with the script
-sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-import ROI_coverage
-from ROI_coverage import *
+from voxel_embeddings_ROIs import ROI_coverage
+from voxel_embeddings_ROIs.ROI_coverage import *
 from datetime import timedelta
-import argparse
 from datetime import datetime
-import requests
 from PIL import Image, PngImagePlugin
 from image_montage import create_montage
 

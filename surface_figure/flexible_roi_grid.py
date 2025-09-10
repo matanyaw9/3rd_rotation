@@ -24,8 +24,9 @@ import datetime
 import math
 
 # Project imports
-sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
-import ROI_coverage  # noqa: E402
+# import .voxel_embeddings_ROIs.ROI_coverage  # noqa: E402
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))  # add DIP_decoder/
+from voxel_embeddings_ROIs import ROI_coverage
 from create_full_brain_map import create_full_brain_map  # noqa: E402
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -48,6 +49,7 @@ GRID_MODE = "manual"  # "manual" or "auto"
 # Each cell is a dict describing which file and hemisphere to render.
 # Matching is by filename (contains) OR by exact filename.
 # Only one of "file_contains" or "file_equals" should be specified per cell.
+# You can set label to "auto" for an auto generated label
 #
 # Example:
 # MANUAL_GRID = [
@@ -97,13 +99,13 @@ GRID_MODE = "manual"  # "manual" or "auto"
 MANUAL_GRID: List[List[Dict[str, Any]]] = [
     # Row 1
     [
-        {"file_contains": "predefined", "hemi": "lh", "label": "Predefined · LH"},
-        {"file_contains": "ms_cos_nearest_center.pkl", "hemi": "lh", "label": "Meanshift Cos NC · LH"},
+        {"file_contains": "predefined", "hemi": "rh", "label": "auto"},
+        {"file_contains": "ms_cos_nearest_center.pkl", "hemi": "rh", "label": "auto"},
     ],
     # Row 2
     [
-        {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Mean Cos NV · LH"},
-        {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "lh", "label": "Meanshift Cos NV  · LH"},
+        {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
+        {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
     ],
 ]
 
@@ -122,7 +124,7 @@ def AUTO_FILTER(cov: "ROI_coverage.InferRoiCoverageConfig") -> bool:
 
 HEMISPHERES: List[str] = ["lh", "rh"]   # e.g. ["lh"] or ["lh", "rh"]
 N_COLS: int = 3                          # auto mode: number of columns to use
-CELL_LABEL = lambda cov, hemi: f"{cov.name} · {hemi.upper()}"
+# cell_label = lambda cov, roi, hemi: f"{cov.name} · size: {cov.get_roi_size(roi)} · {hemi.upper()}"
 
 # ---- Shared presentation knobs ----
 SHOW_COLORBAR: bool = False              # global toggle (on all cells)
@@ -142,6 +144,8 @@ def list_pkl_files(directory: str) -> List[str]:
     files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pkl')]
     return sorted(files, key=lambda f: (0 if "predefined" in os.path.basename(f) else 1, f))
 
+def cell_label(cov: ROI_coverage.InferRoiCoverageConfig, roi, hemi):
+    return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)} · SNR: {cov.get_avg_SNR(roi, ndigits=2)} · {hemi.upper()}"
 
 def scene_key_for(row: int, col: int, n_cols: int) -> str:
     """Return subplot scene key ('scene', 'scene2', ...) for (row, col) given n_cols."""
@@ -202,7 +206,10 @@ def build_manual_grid(
                 cmax=C_MAX,
             )
             mesh_row.append(mesh)
-            label_row.append(cell.get("label", ""))
+            label = cell.get("label", "")
+            if label == 'auto':
+                label = cell_label(cov, roi_name, hemi)
+            label_row.append(label)
 
         meshes_grid.append(mesh_row)
         labels_grid.append(label_row)
@@ -245,7 +252,7 @@ def build_auto_grid(
                 cmin=C_MIN,
                 cmax=C_MAX,
             )
-            label = CELL_LABEL(cov, hemi) if CELL_LABEL else ""
+            label = cell_label(cov, hemi)
             cells.append((mesh, label))
 
     if not cells:
@@ -349,20 +356,6 @@ def create_single_html_file(args, roi_name: str):
     if ann:
         # Extend, don't overwrite any existing annotations
         fig.update_layout(annotations=(fig.layout.annotations or []) + list(ann))
-
-    # # Optional per-cell labels (top-center of each subplot)
-    # ann = []
-    # for r in range(1, n_rows + 1):
-    #     for c in range(1, len(meshes_grid[r - 1]) + 1):
-    #         label = labels_grid[r - 1][c - 1] if labels_grid[r - 1] else ""
-    #         if not label:
-    #             continue
-    #         ann.append(dict(
-    #             x=0.5, y=1.02, xref=f"{scene_key_for(r, c, n_cols)} domain", yref=f"{scene_key_for(r, c, n_cols)} domain",
-    #             text=label, showarrow=False, font=dict(size=14),
-    #         ))
-    # if ann:
-    #     fig.update_layout(annotations=ann)
 
     # Final layout
     fig.update_layout(

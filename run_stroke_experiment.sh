@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=without_face
-#SBATCH --output=logs/%j_without_face.out
+#SBATCH --job-name=altered_imports
+#SBATCH --output=logs/%j_altered_imports.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,7 +17,7 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="without_face"
+RUN_NAME="altered_imports"
 
 # Launch the script with required arguments
 echo "Running python script"
@@ -25,10 +25,9 @@ srun python -u stroke_experimet_CLI.py \
     --run "$RUN_NAME" \
     --image_type shared \
     --images_indices 280 \
-    --modify_roi \
     --create_montage \
     --steps_to_do 1 2 4 \
-    # --roi_to_process EBA \
+    --roi_to_process EBA \
     # --save_path
 
 # Creating image indices

@@ -4,11 +4,8 @@ import matplotlib.cm as cm
 from openTSNE import TSNE as OTSNE
 
 import seaborn as sns
-import os
-import sys
 from itertools import cycle
 from . import ROI_coverage
-from .ROI_coverage import *
 
 
 def plot_roi_intersection_tsne(roi1_indices, roi1_name, roi2_indices, roi2_name, voxel_embeddings_tsne):
@@ -102,7 +99,7 @@ def plot_all_rois_tsne(voxel_embeddings_tsne,
     plt.tight_layout()
     plt.show()
 
-def plot_rois_center_tsne(roi_config:InferRoiCoverageConfig, 
+def plot_rois_center_tsne(roi_config:ROI_coverage.InferRoiCoverageConfig, 
                           ROIs_to_plot=None, 
                           title='Rois plot',
                           voxel_embeddings_tsne=None,

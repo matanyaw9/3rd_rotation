@@ -57,8 +57,8 @@ def create_full_brain_map(sub, hemisphere, voxels, transformation_title, image_h
     #voxels = (voxels - np.min(voxels)) / (np.max(voxels) - np.min(voxels))
 
     # Load the brain surface map of all vertices
-    roi_dir = os.path.join(args.data_dir, 'roi_masks',
-    hemisphere[0]+'h.all-vertices_fsaverage_space.npy')
+    roi_dir = os.path.join(args.data_dir, 'roi_masks', 
+                           hemisphere[0]+'h.all-vertices_fsaverage_space.npy')
     fsaverage_all_vertices = np.load(roi_dir)
 
     # Create the map for the relevant vertices only and fill it with the voxel map

@@ -74,15 +74,6 @@ def summary_roi_coverage(roi_indices, sub_indices):
     print(f"Voxels not in any ROI: {not_in_any_roi.shape[0]}")
     return not_in_any_roi
 
-def find_voxels_with_no_roi(sub_indices, ROI_indices):
-
-    all_indices = np.concatenate(list(ROI_indices.values()))
-    all_indices_unique = np.unique(all_indices)
-    not_in_any_roi = np.setdiff1d(sub_indices, all_indices_unique)
-    
-    return not_in_any_roi
-    
-
 def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
                              voxel_embeddings: torch.Tensor,
                              metric='eucledian',
@@ -155,40 +146,6 @@ def infer_cosine_distances(voxel_embeddings: torch.Tensor, centers: torch.Tensor
 
     return distances
 
-def assign_voxels_to_rois(voxel_embeddings: torch.Tensor,
-                          centers_dict: dict,
-                          ROIs: list) -> (torch.Tensor, dict):
-    """
-    Assign each voxel to the nearest ROI center.
-
-    Args:
-      voxel_embeddings: [N, D] FloatTensor of all voxel embeddings.
-      centers_dict:     {roi_name: center Tensor of shape [D]}.
-      ROIs:             List of roi_names in the same order you’ll use for centers.
-
-    Returns:
-      labels:          LongTensor of shape [N], where labels[i] = j means voxel i → ROIs[j].
-      roi_to_indices:  dict mapping each roi_name -> LongTensor of voxel indices assigned to it.
-    """
-    device = voxel_embeddings.device
-    # 1) Stack your centers into [R, D]
-    centers = torch.stack([centers_dict[roi] for roi in ROIs], dim=0).to(device)  # [R, D]
-
-    # 2) Compute pairwise distances [N, R]
-    #    Using torch.cdist (broadcasted Euclidean)
-    dists = torch.cdist(voxel_embeddings, centers, p=2)  # [N, R]
-
-    # 3) Find nearest center
-    labels = torch.argmin(dists, dim=1)  # [N], values in 0..R-1
-
-       # 4) Build reverse index
-    roi_to_indices = {
-        roi: torch.nonzero(labels == idx, as_tuple=False).squeeze(1)
-        for idx, roi in enumerate(ROIs)
-    }
-
-
-    return labels, roi_to_indices
 
 class InferRoiCoverageConfig:
     """
@@ -269,6 +226,8 @@ class InferRoiCoverageConfig:
         if not isinstance(obj, InferRoiCoverageConfig):
             raise TypeError("Loaded object is not an InferRoiCoverageConfig instance.")
         return obj
+
+
 
     def infer_roi_coverage(self):
         """The Main function - Infer the ROI indices based on the given configuration.

@@ -95,17 +95,36 @@ GRID_MODE = "manual"  # "manual" or "auto"
 #     ],
 # ]
 
-# Nearest Voxel VS Nearest Center
+# # Nearest Voxel VS Nearest Center
+# MANUAL_GRID: List[List[Dict[str, Any]]] = [
+#     # Row 1
+#     [
+#         {"file_contains": "predefined", "hemi": "rh", "label": "auto"},
+#         {"file_contains": "ms_cos_nearest_center.pkl", "hemi": "rh", "label": "auto"},
+#     ],
+#     # Row 2
+#     [
+#         {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
+#         {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
+#     ],
+# ]
+
+# polished vs unpolished
 MANUAL_GRID: List[List[Dict[str, Any]]] = [
     # Row 1
     [
         {"file_contains": "predefined", "hemi": "rh", "label": "auto"},
-        {"file_contains": "ms_cos_nearest_center.pkl", "hemi": "rh", "label": "auto"},
+        {"file_contains": "predefined", "hemi": "lh", "label": "auto"},
     ],
     # Row 2
     [
         {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
-        {"file_equals": "ms_cos_nearest_voxels.pkl", "hemi": "rh", "label": "auto"},
+        {"file_equals": "mean_cos_nearest_voxels_polished.pkl", "hemi": "rh", "label": "auto"},
+    ],
+        # Row 3
+    [
+        {"file_equals": "mean_cos_nearest_voxels.pkl", "hemi": "lh", "label": "auto"},
+        {"file_equals": "mean_cos_nearest_voxels_polished.pkl", "hemi": "lh", "label": "auto"},
     ],
 ]
 

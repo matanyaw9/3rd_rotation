@@ -136,34 +136,35 @@ def run_experiment(args_config):
         else:
             predefined_ROI_indices_dict[ROI] = roi_indices
         
-    roi_coverage_configs = []
+    # roi_coverage_configs = []
 
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='mean', metric='euclidean', discrimination_method='predefined'))
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='mean', metric='euclidean', discrimination_method='predefined'))
 
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='mean', metric='euclidean', discrimination_method='nearest_voxels'))
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='mean', metric='euclidean', discrimination_method='nearest_voxels'))
 
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='mean', metric='cosine', discrimination_method='nearest_voxels'))
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='mean', metric='cosine', discrimination_method='nearest_voxels'))
 
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='meanshift', metric='euclidean', discrimination_method='nearest_voxels'))
-
-
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='meanshift', metric='cosine', discrimination_method='nearest_voxels'))
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='meanshift', metric='euclidean', discrimination_method='nearest_voxels'))
 
 
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='meanshift', metric='euclidean', discrimination_method='nearest_center'))
-
-    roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-                                                                    center_method='meanshift', metric='cosine', discrimination_method='nearest_center'))
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='meanshift', metric='cosine', discrimination_method='nearest_voxels'))
 
 
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='meanshift', metric='euclidean', discrimination_method='nearest_center'))
+
+    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
+    #                                                                 center_method='meanshift', metric='cosine', discrimination_method='nearest_center'))
+
+    roi_coverage_configs = ROI_coverage.load_coverages('/home/matanyaw/DIP_decoder/data/roi_coverages', exclude=['euc'])
     for config in roi_coverage_configs:
-        config.infer_roi_coverage()
+        if config.inferred_ROI_indices_dict is None:
+            config.infer_roi_coverage()
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
 
     inds_nc = np.where(NC[inds]>0.5)[0]
@@ -452,7 +453,7 @@ def run_experiment(args_config):
 
             for config in roi_coverage_configs:
                 print(f'Inferring ROI {ROI} with config: {config.name}')
-                mega_roi_dict[config.name] = config.inferred_ROI_indices_dict[ROI]
+                mega_roi_dict[config.name] = config[ROI]
             
             roi_path = f'{image_save_path}/roi_{ROI}'
             os.makedirs(roi_path, exist_ok=True)

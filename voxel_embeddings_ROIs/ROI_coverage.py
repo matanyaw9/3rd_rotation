@@ -1,9 +1,11 @@
 import torch
 import torch.nn.functional as F
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
+import numpy as np
+import nibabel as nib
+from nilearn import datasets
 # from sklearn.manifold import TSNE
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from scipy.sparse import coo_matrix, csgraph
@@ -18,7 +20,6 @@ This script creates a file with a dictionary of ROIs and their voxel indices for
 # Getting my modules
 sys.path.append('/home/jonathak/VisualEncoder/Analysis/Brain_maps')
 from NIPS_utils import get_hemisphere_indices, get_roi_indices, get_roi_indices_per_hemisphere
-import pickle
 
 
 # Setting up GPU
@@ -173,6 +174,64 @@ def infer_cosine_distances(voxel_embeddings: torch.Tensor, centers: torch.Tensor
 
     return distances
 
+def largest_surface_component(
+    voxel_indices,        # 1D array/list of indices into the hemisphere-sliced voxel vector
+    hemisphere,
+    subject=1,                # 'lh' or 'rh'
+    data_dir='/home/navvew/data/algonauts_2023_challenge_data/subj01',   # same data_dir you pass into argObj(...).data_dir
+    mesh='fsaverage'           # 'fsaverage' | 'fsaverage6' | 'fsaverage5'
+):
+    """
+    Returns the subset of hemi_voxel_indices that belong to the largest
+    connectivity component on the fsaverage *surface* for the given hemisphere.
+    """
+    voxel_indices = np.asarray(voxel_indices, dtype=int)
+    if voxel_indices.size == 0:
+        return voxel_indices  # nothing to do
+    
+    # into hemisphere indexing
+    lh_start, lh_end = get_hemisphere_indices(subject, 'lh')
+    rh_start, rh_end = get_hemisphere_indices(subject, 'rh')
+
+    start, end = get_hemisphere_indices(subject, hemisphere)
+
+    hemi_voxel_indices = voxel_indices[(voxel_indices >= start) & (voxel_indices < end)] - start
+    
+    if len(hemi_voxel_indices) == 0:    # in case there are non of the voxels are in this hemisphere 
+        return hemi_voxel_indices
+    # 1) Load fsaverage mesh (inflated) and roi-mask that maps voxel indices -> surface vertices
+    fsavg = datasets.fetch_surf_fsaverage(mesh)  # paths to GIFTI files
+    mesh_file = fsavg['infl_left'] if hemisphere == 'lh' else fsavg['infl_right']
+    gii = nib.load(mesh_file)
+    coords = gii.darrays[0].data                 # (N_vertices, 3)
+    faces  = gii.darrays[1].data.astype(np.int64)  # (N_faces, 3)
+
+    mask_path = os.path.join(data_dir, 'roi_masks', f"{hemisphere[0]}h.all-vertices_fsaverage_space.npy")
+    fsavg_mask = np.load(mask_path).astype(bool)  # length = N_vertices
+
+    # Map hemi-local voxel indices to *global* vertex ids on the surface
+    hemi_vertices = np.where(fsavg_mask)[0]      # vector of vertex ids that your model uses
+    sel_vertices = hemi_vertices[hemi_voxel_indices]  # global vertex ids for the selected voxels
+
+    # 2) Build sparse adjacency from faces (undirected)
+    # Each triangle (a,b,c) gives edges (a-b, b-c, c-a) and their symmetric counterparts
+    i = faces[:, [0,1,0,2,1,2]].ravel()
+    j = faces[:, [1,0,2,0,2,1]].ravel()
+    data = np.ones_like(i, dtype=np.uint8)
+    nV = coords.shape[0]
+    A = coo_matrix((data, (i, j)), shape=(nV, nV)).tocsr()
+
+    # 3) Induce the subgraph on your selected vertices and find connected components
+    subA = A[sel_vertices][:, sel_vertices]
+    n_comp, labels = csgraph.connected_components(subA, directed=False)
+
+    # 4) Keep largest component
+    # np.bincount needs non-negative ints; find the label with max count
+    largest_label = np.argmax(np.bincount(labels))
+    keep_mask = (labels == largest_label)
+
+    # Map back to the original *hemi voxel indices*
+    return hemi_voxel_indices[keep_mask] + start
 
 class InferRoiCoverageConfig:
     """
@@ -209,6 +268,8 @@ class InferRoiCoverageConfig:
         self.inferred_ROI_indices_dict = None
         self.name = name
         
+        self._is_polished = False
+
         if discrimination_method == 'predefined':
             self.inferred_ROI_indices_dict = predefined_ROI_indices_dict
             self.name = 'predefined'
@@ -343,6 +404,19 @@ class InferRoiCoverageConfig:
         return roi_less
     
 
+    def clear_islands(self):
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        for roi in self.ROI_names:
+            single_component_roi_indices_rh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'rh')
+            single_component_roi_indices_lh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'lh')
+            kept = np.concatenate([single_component_roi_indices_rh, single_component_roi_indices_lh])
+            self.inferred_ROI_indices_dict[roi] = np.unique(kept)  # unique also sorts
+        self.name += '_polished'
+        self._is_polished = True
+        return self
+    
+    
     def get_roi_size(self, ROI):
         if self.inferred_ROI_indices_dict is None:
             raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
@@ -352,12 +426,15 @@ class InferRoiCoverageConfig:
     
     
     def get_label(self):
-        if self.name == 'predefined':
-            return 'Predefined'
-        acronym = lambda words: ''.join([word[0].upper() for word in words.split('_')])
-        label = self.center_method.capitalize() + ' '
-        label += self.metric[:3].capitalize() + ' '
-        label += acronym(self.discrimination_method) 
+        if 'predefined' in self.name:
+            label = 'Predefined'
+        else: 
+            acronym = lambda words: ''.join([word[0].upper() for word in words.split('_')])
+            label = self.center_method.capitalize() + ' '
+            label += self.metric[:3].capitalize() + ' '
+            label += acronym(self.discrimination_method) 
+        if self._is_polished:
+            label += ' Polished'
         return label
 
     def get_avg_SNR(self, roi_name:str='all', ndigits=3):

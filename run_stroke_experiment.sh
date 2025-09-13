@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=altered_imports
-#SBATCH --output=logs/%j_altered_imports.out
+#SBATCH --job-name=test_preinferred_coverages
+#SBATCH --output=logs/%j_test_preinferred_coverages.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,7 +17,7 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="altered_imports"
+RUN_NAME="test_preinferred_coverages"
 
 # Launch the script with required arguments
 echo "Running python script"

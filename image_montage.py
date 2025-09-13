@@ -2,6 +2,7 @@ import os
 import math
 import argparse
 from PIL import Image, ImageDraw, ImageFont
+from voxel_embeddings_ROIs import ROI_coverage
 
 # For Pillow >=10 compatibility
 try:
@@ -20,6 +21,8 @@ try:
 except Exception:
     FONT_PATH = None
     SCALABLE = False
+
+ROI_COVERAGES = ROI_coverage.load_coverages('/home/matanyaw/DIP_decoder/data/roi_coverages', exclude=['euc'])
 
 # Fallback default font
 DEFAULT_FONT = ImageFont.load_default()
@@ -55,34 +58,50 @@ def delete_montage_files(directory):
             except Exception as e:
                 print(f"Warning: could not delete {f}: {e}")
 
+def recreate_img_title(img):
+    roi = img.info.get('ROI Name')
+    title = img.info.get('title')
+    cov_name = title.split(' ')[0]
+    cov = None
+    for c in ROI_COVERAGES:
+        if c.name == cov_name:
+            cov = c
+            break
+    if cov is None: 
+        return title
+    return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)} · SNR: {cov.get_avg_SNR(roi, ndigits=2)}"
 
-def create_montage(input_dir, input_dir2=None, output_path=None, cols=None, thumb_size=None,
+def get_image_files(stroke_imgs_dir, root_imgs_dir):
+    stroke_images = [os.path.join(stroke_imgs_dir, f) for f in os.listdir(stroke_imgs_dir)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', 'tiff')) and 'montage' not in f]
+    root_images = [os.path.join(root_imgs_dir, f) for f in os.listdir(root_imgs_dir)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', 'tiff')) and '_fitted_image_final' not in f]
+    return stroke_images, root_images
+
+def create_montage(stroke_imgs_dir, root_imgs_dir=None, output_path=None, cols=None, thumb_size=None,
                    bg_color=(255, 255, 255), gap=10, main_title=None):
     # Collect image files
     if output_path is None and main_title is not None:
-        output_path = os.path.join(input_dir, f'montage_{main_title.replace(" ", "_")}.png')
+        output_path = os.path.join(stroke_imgs_dir, f'montage_{main_title.replace(" ", "_")}.png')
     elif output_path is None:
-        output_path = os.path.join(input_dir, 'montage.png')
+        output_path = os.path.join(stroke_imgs_dir, 'montage.png')
         
     output_dir = os.path.dirname(output_path)
-    delete_montage_files(output_dir)
+    # delete_montage_files(output_dir)
 
-
-    img_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir)
-            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', 'tiff'))]
-    if input_dir2:
-        files2 = [os.path.join(input_dir2, f) for f in os.listdir(input_dir2)
-                   if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', 'tiff'))]
-        img_files = files2 + img_files
+    if root_imgs_dir is None:
+        root_imgs_dir = os.path.dirname(stroke_imgs_dir)
+    stroke_images, root_images = get_image_files(stroke_imgs_dir, root_imgs_dir)
+    img_files = stroke_images + root_images
     if not img_files:
-        raise RuntimeError(f"No images found in {input_dir}")
+        raise RuntimeError(f"No images found in {stroke_imgs_dir}")
 
     # Load images and extract titles
     loaded = []
     for path in img_files:
         img = Image.open(path)
         img.filename = path
-        img_title = get_image_title(img)
+        img_title = recreate_img_title(img)
         img_timestamp = img.info.get('Timestamp', None)
         loaded.append((img, img_title, img_timestamp))
 
@@ -139,7 +158,7 @@ def create_montage(input_dir, input_dir2=None, output_path=None, cols=None, thum
 
     # Draw each thumbnail and its title
     for idx, (img, img_title, img_timestamp) in enumerate(loaded):
-        print(f"Processing image {idx + 1}/{n}: {img_title} ({img.filename})")
+        # print(f"Processing image {idx + 1}/{n}: {img_title} ({img.filename})")
         im_thumb = img.copy()
         im_thumb.thumbnail((tw, th_img), resample=Resampling.LANCZOS)
 
@@ -193,6 +212,6 @@ if __name__ == '__main__':
     thumb_size = None
     if args.thumb_width and args.thumb_height:
         thumb_size = (args.thumb_width, args.thumb_height)
-    create_montage(args.input_dir, input_dir2=args.input_dir2, output_path=args.output_path,
+    create_montage(args.input_dir, root_imgs_dir=args.input_dir2, output_path=args.output_path,
                    cols=args.cols, thumb_size=thumb_size,
                    gap=args.gap, main_title=args.main_title)

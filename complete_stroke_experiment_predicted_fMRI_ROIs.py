@@ -637,7 +637,7 @@ def run_experiment(args_config):
                 save_as_png(state_dict['out_avg_np'], f'{roi_path}/img_{img_idx}_stroke_{roi_version}_{ROI}_start_fMRI.png', metadata=img_meta)
 
                 if args_config['create_montage']:
-                    create_montage(input_dir=roi_path, input_dir2=image_save_path, main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
+                    create_montage(stroke_imgs_dir=roi_path, root_imgs_dir=image_save_path, main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
 
 
     print('Finished all experiments!')

@@ -6,8 +6,10 @@ import os
 import sys
 # from sklearn.manifold import TSNE
 from sklearn.cluster import MeanShift, estimate_bandwidth
-from scipy.spatial import distance
-
+from scipy.sparse import coo_matrix, csgraph
+import seaborn as sns
+import pickle
+from typing import List
 
 """
 This script creates a file with a dictionary of ROIs and their voxel indices for a given subject.
@@ -44,7 +46,32 @@ def get_roi_names(subject=1):
         if roi_indices is None:
             ROI_names.remove(ROI)
     return ROI_names
-    
+
+def list_pkl_files(directory: str) -> List[str]:
+    """
+    Return a sorted list of .pkl file paths in a directory.
+    'predefined' files are placed first.
+    """
+    if not os.path.isdir(directory):
+        raise NotADirectoryError(f"Not a directory: {directory}")
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pkl')]
+    return sorted(files, key=lambda f: (0 if "predefined" in os.path.basename(f) else 1, f))
+
+def load_coverages(directory, includes=[], equals=[], exclude=[]):
+    """Loads many roi coverages, can specify for files that contain a word, excludes a word, or specific paths"""
+    files = list_pkl_files(directory)
+    if includes:
+        files = [f for f in files if any(term in os.path.basename(f) for term in includes)]
+    if equals:
+        files = [f for f in files if any(os.path.basename(f) == term for term in equals)]
+    if exclude:
+        files = [f for f in files if not any(term in os.path.basename(f) for term in exclude)]
+
+    coverages = [InferRoiCoverageConfig.load(f) for f in files]
+    return coverages
+
+
+
 
 def summary_roi_coverage(roi_indices, sub_indices):
     # turn sub_indices into a 1D numpy array
@@ -153,7 +180,7 @@ class InferRoiCoverageConfig:
 
     Attributes:
         center_method (str): Method to find ROI center ('mean', 'meanshift')
-        distance_method (str): Method to compute distance ('euclidean', 'cosine', etc.)
+        metric (str): Method to compute distance ('euclidean', 'cosine', etc.)
         discrimination_method (str): How to discriminate ROI voxels ('nearest_center', 'nearest_voxels', 'avg_distance')
         params (dict): Additional parameters for methods.
     """
@@ -189,11 +216,16 @@ class InferRoiCoverageConfig:
             self.make_default_name()
 
     def __repr__(self):
-        return (f"RoiInferConfig(center_method={self.center_method}, "
-                f"distance_method={self.distance_method}, "
-                f"discrimination_method={self.discrimination_method}, "
-                )
+        return (self.get_label())
     
+    def __getitem__(self, roi_name):
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        return self.inferred_ROI_indices_dict[roi_name]
+
+    def copy(self): 
+        return pickle.loads(pickle.dumps(self, protocol=pickle.HIGHEST_PROTOCOL))
+
     def sub_indices(self):
         return np.arange(self.lh_start, self.rh_end)
 
@@ -373,6 +405,59 @@ class InferRoiCoverageConfig:
             indices = self.inferred_ROI_indices_dict[roi_name]
             roi_array[i, indices] = 1
         return roi_array
+    
+    def plot_ROI_overlap(self, title=None):
+        """
+        Plots a heatmap where each cell[i, j] shows the percentage of ROI_i overlapping with ROI_j.
+        Rows are ROI1, columns are ROI2.
+
+        Parameters:
+        - ROIs: list of ROI names
+        - ROI_indices: dict mapping ROI name -> array of voxel indices
+        - title: title for the plot
+        """
+
+        # Build overlap percentage matrix
+        n = len(self.ROI_names)
+        overlap_pct = np.zeros((n, n), dtype=float)
+        for i, roi1 in enumerate(self.ROI_names):
+            idx1 = self.inferred_ROI_indices_dict[roi1]
+            size1 = self.get_roi_size(roi1)
+            for j, roi2 in enumerate(self.ROI_names):
+                idx2 = self.inferred_ROI_indices_dict[roi2]
+                count = np.intersect1d(idx1, idx2).shape[0]
+                overlap_pct[i, j] = (count / size1) * 100 if size1 > 0 else 0.0
+
+        # Prepare labels with sizes
+        xlabels = self.ROI_names
+        ylabels = [f"{roi}\n(n={self.get_roi_size(roi)})" for roi in self.ROI_names]
+
+        # Plot heatmap
+        plt.figure(figsize=(12, 10))
+        sns.set(style="white")
+        ax = sns.heatmap(
+            overlap_pct,
+            annot=True, fmt='.1f', annot_kws={'size':9},
+            cmap='Blues', xticklabels=xlabels, yticklabels=ylabels,
+            cbar_kws={"label": "% of ROI1 overlapping ROI2", "shrink": .75},
+            linewidths=0.5, linecolor='gray'
+        )
+
+        # Annotate number of ROI-less voxels if provided
+        ROIless_indices_amount = self.get_roiless_indices()
+        plt.gcf().text(0.99, 0.01, f'Voxels with no assigned ROI: {ROIless_indices_amount}', ha='right', va='bottom', fontsize=10)
+
+
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        if title is None:
+            title = self.get_label() + ' Overlaps'
+        plt.title(title, fontsize=14, pad=20)
+        plt.xlabel('ROI2', fontsize=12)
+        plt.ylabel('ROI1', fontsize=12)
+        plt.tight_layout()
+        plt.show()
+
 
     
 

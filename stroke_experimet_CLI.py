@@ -27,8 +27,10 @@ def argparse_args():
                         help='Whether to save intermediate results throughout the experiment.')
     parser.add_argument('--roi_to_process', type=str, nargs='+', default=None,
                         help='List of specific ROIs to process. If None, all predefined ROIs will be processed.')
-    parser.add_argument('--create_montage', action='store_true',
+    parser.add_argument('--create_montage', action='store_true', 
                         help='Whether to create a montage of the results for each image.')
+    parser.add_argument('--montage_dir', type=str, default=None,
+                        help='Where to create a montage of the results for each image.')
 
     return parser.parse_args()
 
@@ -55,15 +57,23 @@ if __name__ == "__main__":
     start_time = time.time()
     args = argparse_args()
     current_date = datetime.now().strftime("%y_%m_%d")
-    default_save_path = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
+    DEFAULT_SAVE_PATH = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
+    DEFAULT_MONTAGE_DIR = f'/home/matanyaw/DIP_decoder/data/matanya_results/montages/results_{current_date}'
     if args.save_path is None:
-        save_path = default_save_path
+        save_path = DEFAULT_SAVE_PATH
     else:
         save_path = args.save_path
+
+    if args.montage_dir is None:
+        montage_dir = DEFAULT_MONTAGE_DIR
+    else:
+        montage_dir = args.montage_dir
     
     if args.run:
         save_path = os.path.join(save_path, f'run_{args.run}')
+        montage_dir = os.path.join(montage_dir, f'run_{args.run}')
         os.makedirs(save_path, exist_ok=True)
+        os.makedirs(montage_dir, exist_ok=True)
 
     args_config = {
         'images_indices': args.images_indices,  # List of image indices to process in the experiment
@@ -73,7 +83,8 @@ if __name__ == "__main__":
         'run': args.run,  # Name of the run for saving results
         'save_throughout': args.save_throughout,
         'roi_to_process': args.roi_to_process,  # List of specific ROIs to process
-        'create_montage': args.create_montage,  # Whether to create a montage of the results for each image
+        'create_montage': args.create_montage,
+        'montage_dir': montage_dir,
         
         # 'save_throughout': true,
         # 'n_saves': 5,

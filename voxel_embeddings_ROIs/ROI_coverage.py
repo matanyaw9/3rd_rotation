@@ -404,17 +404,17 @@ class InferRoiCoverageConfig:
         return roi_less
     
 
-    def clear_islands(self):
-        if self.inferred_ROI_indices_dict is None:
-            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
-        for roi in self.ROI_names:
-            single_component_roi_indices_rh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'rh')
-            single_component_roi_indices_lh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'lh')
-            kept = np.concatenate([single_component_roi_indices_rh, single_component_roi_indices_lh])
-            self.inferred_ROI_indices_dict[roi] = np.unique(kept)  # unique also sorts
-        self.name += '_polished'
-        self._is_polished = True
-        return self
+    # def clear_islands(self):
+    #     if self.inferred_ROI_indices_dict is None:
+    #         raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+    #     for roi in self.ROI_names:
+    #         single_component_roi_indices_rh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'rh')
+    #         single_component_roi_indices_lh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'lh')
+    #         kept = np.concatenate([single_component_roi_indices_rh, single_component_roi_indices_lh])
+    #         self.inferred_ROI_indices_dict[roi] = np.unique(kept)  # unique also sorts
+    #     self.name += '_polished'
+    #     self._is_polished = True
+    #     return self
     
     
     def get_roi_size(self, ROI):

@@ -124,47 +124,23 @@ def run_experiment(args_config):
     voxel_embeddings = voxel_embeddings[inds]
     
     ROI_names = get_roi_names(args_config['roi_to_process'])  # Get the list of ROIs to process
-    predefined_ROI_indices_dict = {}
+    # predefined_ROI_indices_dict = {}
 
-    # Creating a dictionary of ROI indices (iterating over copy because we remove ROIs that don't exist)
-    for ROI in ROI_names.copy():
+    # # Creating a dictionary of ROI indices (iterating over copy because we remove ROIs that don't exist)
+    # for ROI in ROI_names.copy():
         
-        roi_indices = get_roi_indices(stroke_sub, ROI)
+    #     roi_indices = get_roi_indices(stroke_sub, ROI)
         
-        if roi_indices is None:
-            ROI_names.remove(ROI)
-        else:
-            predefined_ROI_indices_dict[ROI] = roi_indices
+    #     if roi_indices is None:
+    #         ROI_names.remove(ROI)
+    #     else:
+    #         predefined_ROI_indices_dict[ROI] = roi_indices
         
-    # roi_coverage_configs = []
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='mean', metric='euclidean', discrimination_method='predefined'))
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='mean', metric='euclidean', discrimination_method='nearest_voxels'))
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='mean', metric='cosine', discrimination_method='nearest_voxels'))
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='meanshift', metric='euclidean', discrimination_method='nearest_voxels'))
-
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='meanshift', metric='cosine', discrimination_method='nearest_voxels'))
-
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='meanshift', metric='euclidean', discrimination_method='nearest_center'))
-
-    # roi_coverage_configs.append(ROI_coverage.InferRoiCoverageConfig(voxel_embeddings=voxel_embeddings, predefined_ROI_indices_dict=predefined_ROI_indices_dict,
-    #                                                                 center_method='meanshift', metric='cosine', discrimination_method='nearest_center'))
-
     roi_coverage_configs = ROI_coverage.load_coverages('/home/matanyaw/DIP_decoder/data/roi_coverages', exclude=['euc'])
     for config in roi_coverage_configs:
         if config.inferred_ROI_indices_dict is None:
             config.infer_roi_coverage()
+
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
 
     inds_nc = np.where(NC[inds]>0.5)[0]
@@ -449,14 +425,14 @@ def run_experiment(args_config):
             # This dictionary is generated for each ROI, containing the relevant voxels according to each ROI coverage inferring method. 
             mega_roi_dict = dict()
 
-            # mega_roi_dict['Predefined_ROI'] = predefined_ROI_indices_dict[ROI]
-
             for config in roi_coverage_configs:
-                print(f'Inferring ROI {ROI} with config: {config.name}')
                 mega_roi_dict[config.name] = config[ROI]
             
             roi_path = f'{image_save_path}/roi_{ROI}'
             os.makedirs(roi_path, exist_ok=True)
+
+            montage_roi_dir = os.path.join(args_config['montage_dir'], f'roi_{ROI}')
+            os.makedirs(montage_roi_dir, exist_ok=True)
             
             stroke_target_all = original_target_all.clone().detach()
             
@@ -636,8 +612,12 @@ def run_experiment(args_config):
                 }
                 save_as_png(state_dict['out_avg_np'], f'{roi_path}/img_{img_idx}_stroke_{roi_version}_{ROI}_start_fMRI.png', metadata=img_meta)
 
-                if args_config['create_montage']:
-                    create_montage(stroke_imgs_dir=roi_path, root_imgs_dir=image_save_path, main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
+            montage_path = os.path.join(montage_roi_dir, f'montage_img_{img_idx}_{ROI}.png')
+            if args_config['create_montage']:
+                create_montage(stroke_imgs_dir=roi_path, 
+                                root_imgs_dir=image_save_path,
+                                output_path=montage_path,
+                                main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
 
 
     print('Finished all experiments!')

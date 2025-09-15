@@ -12,6 +12,9 @@ PYTHON_EXE = "/home/matanyaw/miniconda3/envs/amit-env/bin/python"
 PROJECT_ROOT = Path("/home/matanyaw/DIP_decoder")
 CLI_PATH = PROJECT_ROOT / "stroke_experimet_CLI.py"
 LOG_DIR = PROJECT_ROOT / "logs"
+# ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
+ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/one_hemi_roi_coverages'
+
 
 
 # Presets
@@ -21,6 +24,7 @@ jonathans_images = [1, 4, 7, 9, 15, 16, 18, 20, 21, 29, 51, 65, 69, 96, 99]
 
 def build_cli_args(
     run: str,
+    roi_cov_dir: str,
     image_type: str,
     images_indices,
     create_montage: bool,
@@ -31,6 +35,7 @@ def build_cli_args(
     """Turn Python values into CLI flags for stroke_experimet_CLI.py."""
     args = [
         "--run", run,
+        "--roi_cov_dir", roi_cov_dir, 
         "--image_type", image_type,
         "--steps_to_do", *map(str, steps_to_do),
         "--images_indices", *map(str, images_indices),
@@ -52,6 +57,7 @@ def submit_job(
     hours: int,
     ntasks: int,
     run: str,
+    roi_cov_dir: str,
     image_type: str,
     images_indices,
     steps_to_do,
@@ -65,6 +71,7 @@ def submit_job(
 
     cli_args = build_cli_args(
         run=run,
+        roi_cov_dir=roi_cov_dir,
         image_type=image_type,
         images_indices=images_indices,
         create_montage=create_montage,
@@ -127,7 +134,8 @@ def parse_args():
     p.add_argument("--ntasks", type=int, default=1)
 
     # CLI params to your script
-    p.add_argument("--run", default="running_script", help="Base run name; chunk index is appended.")
+    p.add_argument("--run", type=str, default="running_script", help="Base run name; chunk index is appended.")
+    p.add_argument("--roi_cov_dir", type=str, default=ROI_COVERAGE_DIR, help="Directory with inferred ROI coverages stored")
     p.add_argument("--image_type", default="shared")
     p.add_argument("--images_indices", nargs="+", type=int, default=None,
                    help="Explicit indices override --imgs preset.")
@@ -223,6 +231,7 @@ def main():
             hours=args.hours,
             ntasks=args.ntasks,
             run=run_name,
+            roi_cov_dir=args.roi_cov_dir,
             image_type=args.image_type,
             images_indices=chunk,
             steps_to_do=args.steps_to_do,

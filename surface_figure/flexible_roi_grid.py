@@ -31,7 +31,7 @@ from create_full_brain_map import create_full_brain_map  # noqa: E402
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 RESULTS_DIR = '/home/matanyaw/DIP_decoder/data/matanya_results'
-
+DEFAULT_ROI_DIR = "/home/matanyaw/data/roi_coverages"
 
 # =========================
 # EDITOR ZONE
@@ -300,7 +300,7 @@ def build_auto_grid(
     return meshes_grid, labels_grid
 
 
-def create_single_html_file(args, roi_name: str):
+def build_grid(args, roi_name: str):
     """Generate and save a grid of meshes (manual or auto)."""
     all_files = list_pkl_files(args.roi_dir)
     if not all_files:
@@ -399,7 +399,7 @@ def main():
     )
     parser.add_argument("--roi_name", default="all",
                         help="ROI name to visualize (default: all ROIs)")
-    parser.add_argument("--roi_dir", default="/home/matanyaw/data/roi_coverages",
+    parser.add_argument("--roi_dir", default=DEFAULT_ROI_DIR,
                         help="Directory containing .pkl files of the ROI coverages")
     parser.add_argument("--subject", type=int, default=1, choices=[1, 2],
                         help="Subject index (default: 1)")
@@ -426,7 +426,7 @@ def main():
                          f"Available: {', '.join(roi_names)} or 'all'")
 
     for roi_name in rois_to_plot:
-        create_single_html_file(args, roi_name)
+        build_grid(args, roi_name)
 
 
 if __name__ == "__main__":

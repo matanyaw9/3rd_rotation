@@ -28,6 +28,7 @@ srun python -u stroke_experimet_CLI.py \
     --create_montage \
     --steps_to_do 1 2 4 \
     --roi_to_process EBA \
+    --roi_cov_dir "/home/matanyaw/DIP_decoder/data/one_hemi_roi_coverages" \
     # --save_path
 
 # Creating image indices

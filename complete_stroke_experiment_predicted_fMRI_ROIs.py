@@ -47,6 +47,9 @@ from datetime import datetime
 from PIL import Image, PngImagePlugin
 from image_montage import create_montage
 
+
+ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
+
 def get_roi_names(subset_rois):
     # Defining the desired ROI masks
 
@@ -135,8 +138,12 @@ def run_experiment(args_config):
     #         ROI_names.remove(ROI)
     #     else:
     #         predefined_ROI_indices_dict[ROI] = roi_indices
-        
-    roi_coverage_configs = ROI_coverage.load_coverages('/home/matanyaw/DIP_decoder/data/roi_coverages', exclude=['euc'])
+
+
+    # Loading the ROI coverages from a directory where they are stored, already inferred.    
+    roi_cov_dir = args_config['roi_cov_dir']
+    print('Loading ROI Coverages from: ', roi_cov_dir)
+    roi_coverage_configs = ROI_coverage.load_coverages(args_config['roi_cov_dir'], exclude=['euc'])
     for config in roi_coverage_configs:
         if config.inferred_ROI_indices_dict is None:
             config.infer_roi_coverage()

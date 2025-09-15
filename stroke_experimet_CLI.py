@@ -10,12 +10,18 @@ sys.path.append('/home/matanyaw/DIP_decoder/voxel_embeddings_ROIs')
 from ROI_coverage import *
 
 
+current_date = datetime.now().strftime("%y_%m_%d")
+ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
+DEFAULT_SAVE_PATH = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
+DEFAULT_MONTAGE_DIR = f'/home/matanyaw/DIP_decoder/data/matanya_results/montages/results_{current_date}'
+
 def argparse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Run the complete stroke experiment on ROIs.')
 
     parser.add_argument('--save_path', type=str, default=None,
-                        help='Root path to save results.')
+                        help=f'Root path to save results. Default: {DEFAULT_SAVE_PATH}')
+    parser.add_argument('--roi_cov_dir', type=str, default=ROI_COVERAGE_DIR, help=f'Directory with inferred ROI coverages stored. Default: {ROI_COVERAGE_DIR}')
     parser.add_argument('--run', type=str, default=None, help='Name of the run for saving results.')
     parser.add_argument('--steps_to_do', type=int, nargs='+', default=[1, 2, 3, 4],
                         help='List of steps to perform in the experiment.')
@@ -30,7 +36,7 @@ def argparse_args():
     parser.add_argument('--create_montage', action='store_true', 
                         help='Whether to create a montage of the results for each image.')
     parser.add_argument('--montage_dir', type=str, default=None,
-                        help='Where to create a montage of the results for each image.')
+                        help=f'Where to create a montage of the results for each image. Default: {DEFAULT_MONTAGE_DIR}')
 
     return parser.parse_args()
 
@@ -56,9 +62,8 @@ if __name__ == "__main__":
 
     start_time = time.time()
     args = argparse_args()
-    current_date = datetime.now().strftime("%y_%m_%d")
-    DEFAULT_SAVE_PATH = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
-    DEFAULT_MONTAGE_DIR = f'/home/matanyaw/DIP_decoder/data/matanya_results/montages/results_{current_date}'
+
+
     if args.save_path is None:
         save_path = DEFAULT_SAVE_PATH
     else:
@@ -77,6 +82,7 @@ if __name__ == "__main__":
 
     args_config = {
         'images_indices': args.images_indices,  # List of image indices to process in the experiment
+        'roi_cov_dir': args.roi_cov_dir,
         'save_path': save_path,  # Root path to save results
         'steps_to_do': args.steps_to_do,  # List of steps to perform in the experiment
         'image_type': args.image_type,  # Type of images to use in the experiment

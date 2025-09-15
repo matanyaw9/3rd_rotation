@@ -67,7 +67,7 @@ def recreate_img_title(img, roi_coverages):
             cov = c
             break
     if cov is None: 
-        return title
+        raise ValueError(f"Could not find coverage named {cov_name} in provided ROI coverages")
     # return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)} · SNR: {cov.get_avg_SNR(roi, ndigits=2)}"
     return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)}"
 
@@ -84,6 +84,7 @@ def create_montage(stroke_imgs_dir, root_imgs_dir=None, roi_cov_dir=DEFAULT_ROI_
     
     roi_coverages = ROI_coverage.load_coverages(roi_cov_dir)
     # Collect image files
+    print("Creating montaage with ROI coverages form: ", roi_cov_dir)
     if output_path is None and main_title is not None:
         output_path = os.path.join(stroke_imgs_dir, f'montage_{main_title.replace(" ", "_")}.png')
     elif output_path is None:
@@ -101,7 +102,14 @@ def create_montage(stroke_imgs_dir, root_imgs_dir=None, roi_cov_dir=DEFAULT_ROI_
 
     # Load images and extract titles
     loaded = []
-    for path in img_files:
+    for path in root_images:
+        img = Image.open(path)
+        img.filename = path
+        img_title = img.info.get('title')
+        img_timestamp = img.info.get('Timestamp', None)
+        loaded.append((img, img_title, img_timestamp))
+
+    for path in stroke_images:
         img = Image.open(path)
         img.filename = path
         img_title = recreate_img_title(img, roi_coverages)
@@ -201,8 +209,8 @@ def create_montage(stroke_imgs_dir, root_imgs_dir=None, roi_cov_dir=DEFAULT_ROI_
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create an image montage from a directory of images.')
-    parser.add_argument('input_dir', help='Directory containing images')
-    parser.add_argument('--input_dir2', default=None, help='Optional second directory for images')
+    parser.add_argument('stroke_imgs_dir', help='Directory containing images')
+    parser.add_argument('--root_imgs_dir', default=None, help='Optional second directory for images')
     parser.add_argument('--output_path', default=None, help='File path to save montage (e.g., montage.png)')
     parser.add_argument('--cols', type=int, default=None, help='Number of columns in the grid')
     parser.add_argument('--thumb-width', type=int, default=None, help='Max width of each thumbnail')
@@ -215,6 +223,6 @@ if __name__ == '__main__':
     thumb_size = None
     if args.thumb_width and args.thumb_height:
         thumb_size = (args.thumb_width, args.thumb_height)
-    create_montage(args.input_dir, root_imgs_dir=args.input_dir2, output_path=args.output_path,
+    create_montage(args.stroke_imgs_dir, root_imgs_dir=args.root_imgs_dir, output_path=args.output_path,
                    cols=args.cols, thumb_size=thumb_size,
                    gap=args.gap, main_title=args.main_title)

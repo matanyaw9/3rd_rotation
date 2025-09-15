@@ -104,7 +104,7 @@ def summary_roi_coverage(roi_indices, sub_indices):
 
 def infer_center_by_meanshift(predefined_ROI_indices: torch.Tensor,
                              voxel_embeddings: torch.Tensor,
-                             metric='eucledian',
+                             metric='cosine',
                              with_labels=False,
                              quantile: float = 0.2,
                              n_samples: int = 500) -> torch.Tensor:
@@ -248,9 +248,10 @@ class InferRoiCoverageConfig:
                  predefined_ROI_indices_dict: dict,
                  subject:int=1,
                  center_method='mean', 
-                 metric='euclidean', 
+                 metric='cosine', 
                  discrimination_method='nearest_voxels',
                  name=None,
+                 hemisphere='both'
                  ):
         self.voxel_embeddings = voxel_embeddings
         self.predefined_ROI_indices_dict = predefined_ROI_indices_dict
@@ -270,9 +271,14 @@ class InferRoiCoverageConfig:
         
         self._is_polished = False
 
+        if hemisphere not in ['both', 'lh', 'rh']:
+            raise ValueError("hemisphere must be 'both', 'lh', or 'rh'")
+        self.hemisphere = hemisphere
+
+
         if discrimination_method == 'predefined':
-            self.inferred_ROI_indices_dict = predefined_ROI_indices_dict
-            self.name = 'predefined'
+            self.inferred_ROI_indices_dict = predefined_ROI_indices_dict.copy()
+            
         if self.name is None:
             self.make_default_name()
 
@@ -292,20 +298,26 @@ class InferRoiCoverageConfig:
 
     def make_default_name(self):
         """This name will be used for storing in a file"""
-        name = ''
-        if self.center_method=='meanshift':
-            name += 'ms'
+        if self.discrimination_method == 'predefined':
+            name = 'predefined'
         else:
-            name += self.center_method
-        name += '_'
-        if self.metric == 'euclidean':
-            name += 'euc'
-        elif self.metric == 'cosine':
-            name += 'cos'
-        else: 
-            name += self.metric
-        name += '_'
-        name += self.discrimination_method
+            name = ''
+            if self.center_method=='meanshift':
+                name += 'ms'
+            else:
+                name += self.center_method
+            name += '_'
+            if self.metric == 'euclidean':
+                name += 'euc'
+            elif self.metric == 'cosine':
+                name += 'cos'
+            else: 
+                name += self.metric
+            name += '_'
+            name += self.discrimination_method
+        if self.hemisphere != 'both':
+            name += '_' + self.hemisphere
+    
         self.name = name
         
     def save(self, path):
@@ -330,6 +342,7 @@ class InferRoiCoverageConfig:
             self.infer_centers()
             distances = self.infer_distances()
             self.infer_roi_indices(distances)
+        self._filter_voxels_by_hemisphere()
         return self.inferred_ROI_indices_dict
 
     
@@ -395,6 +408,19 @@ class InferRoiCoverageConfig:
         self.inferred_ROI_indices_dict = inferred_ROI_indices
         return inferred_ROI_indices
     
+    def _filter_voxels_by_hemisphere(self):
+        if self.hemisphere == 'both':
+            return
+        elif self.hemisphere == 'lh':
+            start = self.lh_start
+            end = self.lh_end
+        elif self.hemisphere == 'rh':
+            start = self.rh_start
+            end = self.rh_end
+        for roi in self.ROI_names:
+            voxel_indices = self.inferred_ROI_indices_dict[roi]
+            self.inferred_ROI_indices_dict[roi] = voxel_indices[(voxel_indices >= start) & (voxel_indices < end)]
+
     def get_roiless_indices(self):
         if self.inferred_ROI_indices_dict is None:
             raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
@@ -404,17 +430,19 @@ class InferRoiCoverageConfig:
         return roi_less
     
 
-    # def clear_islands(self):
-    #     if self.inferred_ROI_indices_dict is None:
-    #         raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
-    #     for roi in self.ROI_names:
-    #         single_component_roi_indices_rh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'rh')
-    #         single_component_roi_indices_lh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'lh')
-    #         kept = np.concatenate([single_component_roi_indices_rh, single_component_roi_indices_lh])
-    #         self.inferred_ROI_indices_dict[roi] = np.unique(kept)  # unique also sorts
-    #     self.name += '_polished'
-    #     self._is_polished = True
-    #     return self
+    def clear_islands(self):
+        # Function is disabled:
+        raise ValueError("clear_islands() is disabled for now.")
+        if self.inferred_ROI_indices_dict is None:
+            raise ValueError("You need to run infer_roi_coverage() first to get the inferred ROI indices.")
+        for roi in self.ROI_names:
+            single_component_roi_indices_rh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'rh')
+            single_component_roi_indices_lh = largest_surface_component(self.inferred_ROI_indices_dict[roi], 'lh')
+            kept = np.concatenate([single_component_roi_indices_rh, single_component_roi_indices_lh])
+            self.inferred_ROI_indices_dict[roi] = np.unique(kept)  # unique also sorts
+        self.name += '_polished'
+        self._is_polished = True
+        return self
     
     
     def get_roi_size(self, ROI):
@@ -435,6 +463,10 @@ class InferRoiCoverageConfig:
             label += acronym(self.discrimination_method) 
         if self._is_polished:
             label += ' Polished'
+        if self.hemisphere == 'lh':
+            label += ' Left'
+        elif self.hemisphere == 'rh': 
+            label += ' Right'
         return label
 
     def get_avg_SNR(self, roi_name:str='all', ndigits=3):
@@ -449,6 +481,8 @@ class InferRoiCoverageConfig:
             indices = self.inferred_ROI_indices_dict[roi_name]
         elif roi_name == 'all':
             indices = np.concatenate(list(self.inferred_ROI_indices_dict.values()))
+        if indices.size == 0:
+            return None
         return round(np.average(nc[indices]), ndigits)
         
 
@@ -523,8 +557,6 @@ class InferRoiCoverageConfig:
         # Annotate number of ROI-less voxels if provided
         ROIless_indices_amount = self.get_roiless_indices()
         plt.gcf().text(0.99, 0.01, f'Voxels with no assigned ROI: {ROIless_indices_amount}', ha='right', va='bottom', fontsize=10)
-
-
         plt.xticks(rotation=45, ha='right')
         plt.yticks(rotation=0)
         if title is None:
@@ -535,8 +567,6 @@ class InferRoiCoverageConfig:
         plt.tight_layout()
         plt.show()
 
-
-    
 
 def infer_by_avg_distance(inferConfig: InferRoiCoverageConfig, distances, print_info=False):
     inferred_indices = {}

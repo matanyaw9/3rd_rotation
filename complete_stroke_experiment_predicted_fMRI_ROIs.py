@@ -14,7 +14,7 @@ from models import *
 import torch
 # import torch.optim
 import torch.nn.functional as F
-# import random
+import random
 import time
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from utils.denoising_utils import *
@@ -143,10 +143,12 @@ def run_experiment(args_config):
     # Loading the ROI coverages from a directory where they are stored, already inferred.    
     roi_cov_dir = args_config['roi_cov_dir']
     print('Loading ROI Coverages from: ', roi_cov_dir)
-    roi_coverage_configs = ROI_coverage.load_coverages(args_config['roi_cov_dir'], exclude=['euc'])
+    roi_coverage_configs = ROI_coverage.load_coverages(roi_cov_dir, exclude=['euc'])
     for config in roi_coverage_configs:
         if config.inferred_ROI_indices_dict is None:
             config.infer_roi_coverage()
+        assert config.hemisphere in ['both', 'lh', 'rh']
+        print(config)
 
     NC = np.load("/home/romanb/data/datasets/NVD/tutorial_data/noise_ceiling/noise_ceiling.npy")
 
@@ -624,6 +626,7 @@ def run_experiment(args_config):
                 create_montage(stroke_imgs_dir=roi_path, 
                                 root_imgs_dir=image_save_path,
                                 output_path=montage_path,
+                                roi_cov_dir=roi_cov_dir,
                                 main_title=f'Image {img_idx} - ROI {ROI} Subject {stroke_sub}')
 
 

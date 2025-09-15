@@ -13,7 +13,7 @@ from ROI_coverage import *
 current_date = datetime.now().strftime("%y_%m_%d")
 ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
 DEFAULT_SAVE_PATH = f'/home/matanyaw/DIP_decoder/data/matanya_results/results_{current_date}'
-DEFAULT_MONTAGE_DIR = f'/home/matanyaw/DIP_decoder/data/matanya_results/montages/results_{current_date}'
+# DEFAULT_MONTAGE_DIR = f'/home/matanyaw/DIP_decoder/data/matanya_results/montages/results_{current_date}'
 
 def argparse_args():
     """Parse command line arguments."""
@@ -36,7 +36,7 @@ def argparse_args():
     parser.add_argument('--create_montage', action='store_true', 
                         help='Whether to create a montage of the results for each image.')
     parser.add_argument('--montage_dir', type=str, default=None,
-                        help=f'Where to create a montage of the results for each image. Default: {DEFAULT_MONTAGE_DIR}')
+                        help=f'Where to create a montage of the results for each image. Default: {DEFAULT_SAVE_PATH}')
 
     return parser.parse_args()
 
@@ -70,13 +70,13 @@ if __name__ == "__main__":
         save_path = args.save_path
 
     if args.montage_dir is None:
-        montage_dir = DEFAULT_MONTAGE_DIR
+        montage_dir = DEFAULT_SAVE_PATH
     else:
         montage_dir = args.montage_dir
     
     if args.run:
         save_path = os.path.join(save_path, f'run_{args.run}')
-        montage_dir = os.path.join(montage_dir, f'run_{args.run}')
+        montage_dir = os.path.join(montage_dir, f'run_{args.run}_montages')
         os.makedirs(save_path, exist_ok=True)
         os.makedirs(montage_dir, exist_ok=True)
 

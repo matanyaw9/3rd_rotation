@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=montage_roi_dir
-#SBATCH --output=logs/%j_montage_roi_dir.out
+#SBATCH --job-name=test_hemisphere
+#SBATCH --output=logs/%j_test_hemisphere.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
@@ -17,7 +17,7 @@ conda activate amit-env
 mkdir -p logs
 
 # Choose a name for this run (can be anything)
-RUN_NAME="montage_roi_dir"
+RUN_NAME="test_hemisphere"
 
 # Launch the script with required arguments
 echo "Running python script"

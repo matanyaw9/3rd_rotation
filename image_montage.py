@@ -22,8 +22,7 @@ except Exception:
     FONT_PATH = None
     SCALABLE = False
 
-ROI_COVERAGES = ROI_coverage.load_coverages('/home/matanyaw/DIP_decoder/data/roi_coverages', exclude=['euc'])
-
+DEFAULT_ROI_COV_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
 # Fallback default font
 DEFAULT_FONT = ImageFont.load_default()
 # Dummy draw for measuring
@@ -58,18 +57,20 @@ def delete_montage_files(directory):
             except Exception as e:
                 print(f"Warning: could not delete {f}: {e}")
 
-def recreate_img_title(img):
+def recreate_img_title(img, roi_coverages):
     roi = img.info.get('ROI Name')
     title = img.info.get('title')
-    cov_name = title.split(' ')[0]
+    cov_name = img.info.get('ROI Version')
     cov = None
-    for c in ROI_COVERAGES:
+    for c in roi_coverages:
         if c.name == cov_name:
             cov = c
             break
     if cov is None: 
         return title
-    return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)} · SNR: {cov.get_avg_SNR(roi, ndigits=2)}"
+    # return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)} · SNR: {cov.get_avg_SNR(roi, ndigits=2)}"
+    return f"{cov.get_label()} · Size: {cov.get_roi_size(roi)}"
+
 
 def get_image_files(stroke_imgs_dir, root_imgs_dir):
     stroke_images = [os.path.join(stroke_imgs_dir, f) for f in os.listdir(stroke_imgs_dir)
@@ -78,8 +79,10 @@ def get_image_files(stroke_imgs_dir, root_imgs_dir):
             if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', 'tiff')) and '_fitted_image_final' not in f]
     return stroke_images, root_images
 
-def create_montage(stroke_imgs_dir, root_imgs_dir=None, output_path=None, cols=None, thumb_size=None,
+def create_montage(stroke_imgs_dir, root_imgs_dir=None, roi_cov_dir=DEFAULT_ROI_COV_DIR, output_path=None, cols=None, thumb_size=None,
                    bg_color=(255, 255, 255), gap=10, main_title=None):
+    
+    roi_coverages = ROI_coverage.load_coverages(roi_cov_dir)
     # Collect image files
     if output_path is None and main_title is not None:
         output_path = os.path.join(stroke_imgs_dir, f'montage_{main_title.replace(" ", "_")}.png')
@@ -101,7 +104,7 @@ def create_montage(stroke_imgs_dir, root_imgs_dir=None, output_path=None, cols=N
     for path in img_files:
         img = Image.open(path)
         img.filename = path
-        img_title = recreate_img_title(img)
+        img_title = recreate_img_title(img, roi_coverages)
         img_timestamp = img.info.get('Timestamp', None)
         loaded.append((img, img_title, img_timestamp))
 

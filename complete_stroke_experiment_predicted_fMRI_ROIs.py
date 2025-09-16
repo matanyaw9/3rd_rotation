@@ -19,8 +19,8 @@ import time
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from utils.denoising_utils import *
 # import _pickle as cPickle
-torch.backends.cudnn.enabled = True
-torch.backends.cudnn.benchmark =True
+# torch.backends.cudnn.enabled = True
+# torch.backends.cudnn.benchmark =True
 dtype = torch.cuda.FloatTensor
 import seaborn as sns
 sns.set_style("darkgrid", {"axes.facecolor": ".9"})
@@ -49,6 +49,45 @@ from image_montage import create_montage
 
 
 ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
+
+# ---- Reproducibility switch (add this near the top, before you build nets) ----
+
+SEED = 1337
+
+# Environment seeds (must be set before importing/using torch CUDA algorithms)
+os.environ["PYTHONHASHSEED"] = str(SEED)
+# Needed for full CUDA determinism on recent PyTorch/CUDA (pick one of the two values)
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"   # or ":4096:2" for larger GEMMs
+
+# If you want to lock to a single GPU explicitly
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"   # you already set this later; set it here once.
+
+
+def set_seed(seed: int = SEED):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # cuDNN must avoid benchmark/autotune to remain deterministic
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = True  # fine to keep True
+
+    # Enforce deterministic kernels (will raise if a non-deterministic op is used)
+    # try:
+    #     torch.use_deterministic_algorithms(True)
+    # except Exception:
+    #     pass
+    print(f"[SEED] Using SEED={SEED}, torch {torch.__version__}, cuda {torch.version.cuda}")
+
+set_seed(SEED)
+# ---- end reproducibility block ----
+
+
+
 
 def get_roi_names(subset_rois):
     # Defining the desired ROI masks

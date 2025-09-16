@@ -212,6 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('stroke_imgs_dir', help='Directory containing images')
     parser.add_argument('--root_imgs_dir', default=None, help='Optional second directory for images')
     parser.add_argument('--output_path', default=None, help='File path to save montage (e.g., montage.png)')
+    parser.add_argument('--roi_cov_dir', default=DEFAULT_ROI_COV_DIR, help='Directory containing ROI coverage JSON files')
     parser.add_argument('--cols', type=int, default=None, help='Number of columns in the grid')
     parser.add_argument('--thumb-width', type=int, default=None, help='Max width of each thumbnail')
     parser.add_argument('--thumb-height', type=int, default=None, help='Max height of each thumbnail')
@@ -223,6 +224,6 @@ if __name__ == '__main__':
     thumb_size = None
     if args.thumb_width and args.thumb_height:
         thumb_size = (args.thumb_width, args.thumb_height)
-    create_montage(args.stroke_imgs_dir, root_imgs_dir=args.root_imgs_dir, output_path=args.output_path,
+    create_montage(args.stroke_imgs_dir, root_imgs_dir=args.root_imgs_dir, output_path=args.output_path, roi_cov_dir=args.roi_cov_dir,
                    cols=args.cols, thumb_size=thumb_size,
                    gap=args.gap, main_title=args.main_title)

@@ -6,7 +6,6 @@ warnings.filterwarnings("ignore")
 # import matplotlib
 # import matplotlib.pyplot as plt
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
 sys.path.append('/home/jonathak/VisualEncoder/DIP_decoder/GP-DIP/')
 import numpy as np
@@ -21,7 +20,6 @@ from utils.denoising_utils import *
 # import _pickle as cPickle
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.benchmark =True
-dtype = torch.cuda.FloatTensor
 import seaborn as sns
 sns.set_style("darkgrid", {"axes.facecolor": ".9"})
 sys.path.append('/home/romanb/PycharmProjects/BrainVisualReconst/')
@@ -77,14 +75,14 @@ def set_seed(seed: int = SEED):
     torch.backends.cudnn.enabled = True  # fine to keep True
 
     # Enforce deterministic kernels (will raise if a non-deterministic op is used)
-    # try:
-    #     torch.use_deterministic_algorithms(True)
-    # except Exception:
-    #     pass
+    # torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"[SEED] Using SEED={SEED}, torch {torch.__version__}, cuda {torch.version.cuda}")
 
 set_seed(SEED)
 # ---- end reproducibility block ----
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+dtype = torch.cuda.FloatTensor
 
 
 
@@ -239,8 +237,14 @@ def run_experiment(args_config):
     
     # DIP parameters
     INPUT = 'noise'
-    pad = 'reflection'
+    # pad = 'reflection'    # non-deterministic
+    pad = 'replication'     # deterministic
+    # pad = 'zero'
+    # UPSAMPLE_MODE = 'bilinear'    # non-deterministic
+    UPSAMPLE_MODE = 'nearest'       # deterministic
+
     OPT_OVER = 'net' # optimize over the net parameters only
+
     c = 1./30.
     reg_noise_std = 1./30.
 
@@ -314,7 +318,7 @@ def run_experiment(args_config):
                     skip_n33u=128,
                     skip_n11=2,
                     num_scales=3,
-                    upsample_mode='bilinear').type(dtype)
+                    upsample_mode=UPSAMPLE_MODE).type(dtype)
 
         ## Optimize
         state_dict = {
@@ -394,7 +398,7 @@ def run_experiment(args_config):
                             skip_n33u=128,
                             skip_n11=2,
                             num_scales=3,
-                            upsample_mode='bilinear').type(dtype)
+                            upsample_mode=UPSAMPLE_MODE).type(dtype)
 
             checkpoint = torch.load(os.path.join(image_save_path, 'dip_on_original_image.pth'))
             net.load_state_dict(checkpoint['net_state'])
@@ -507,7 +511,7 @@ def run_experiment(args_config):
                     skip_n33u=128,
                     skip_n11=2,
                     num_scales=3,
-                    upsample_mode='bilinear').type(dtype)
+                    upsample_mode=UPSAMPLE_MODE).type(dtype)
 
                     # Starting from original image
                     checkpoint = torch.load(os.path.join(image_save_path, 'dip_on_original_image.pth'))

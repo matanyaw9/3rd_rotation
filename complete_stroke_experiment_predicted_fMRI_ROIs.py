@@ -109,6 +109,41 @@ def get_roi_names(subset_rois):
             raise ValueError("No valid ROIs provided in --roi_to_process argument.")
     return ROI_names
 
+def weighted_mse_by_roi(pred: torch.Tensor,
+                        target: torch.Tensor,
+                        inds_nc_t: torch.Tensor,
+                        roi_idx_local: np.ndarray,
+                        alpha: float) -> torch.Tensor:
+    """
+    pred/target: shape [B, N_nc] (here B=1)
+    inds_nc_t: 1D torch.LongTensor of indices into the 'inds' slice (NC positions)
+    roi_idx_local: 1D numpy/torch indices into the same 'inds' slice (stroked voxels)
+    alpha: weight for stroked voxels; non-stroked gets (1 - alpha)
+    """
+
+    if alpha is None: 
+        raise ValueError("Alpha was not provided!")
+        return F.mse_loss(pred, target)
+
+    # make sure types/devices line up
+    if not torch.is_tensor(roi_idx_local):
+        roi_idx_local = torch.as_tensor(roi_idx_local, device=inds_nc_t.device)
+
+    # mask within the NC subset: True where NC index is in the stroked ROI
+    roi_nc_mask = torch.isin(inds_nc_t, roi_idx_local)
+
+    w_stroke = float(alpha)
+    w_non    = float(1.0 - alpha)
+
+    # weights per NC voxel, shape [N_nc] -> [1, N_nc]
+    weights = torch.where(roi_nc_mask,
+                          torch.tensor(w_stroke, device=pred.device, dtype=pred.dtype),
+                          torch.tensor(w_non,    device=pred.device, dtype=pred.dtype)).unsqueeze(0)
+
+    # weighted MSE, normalized by total weight (keeps loss scale stable across ROI sizes)
+    se = (pred - target).pow(2)
+    loss = (se * weights).sum() / weights.sum()
+    return loss
 
 def run_experiment(args_config):
     """ This function runs the complete stroke experiment on ROIs.
@@ -538,8 +573,8 @@ def run_experiment(args_config):
                         enc_in = (out-mean)/std
                         vox_pred = model(enc_in, inds_nc_torch.unsqueeze(0).cuda())
                         
-                        loss = F.mse_loss(vox_pred, stroke_target_nc)#+total_variation_loss(out)+0.01*norm_6(out)#- 0.1*torch.mean(F.cosine_similarity(vox_pred, target))
-
+                        # loss = F.mse_loss(vox_pred, stroke_target_nc)#+total_variation_loss(out)+0.01*norm_6(out)#- 0.1*torch.mean(F.cosine_similarity(vox_pred, target))
+                        loss = weighted_mse_by_roi(vox_pred, stroke_target_nc, inds_nc_torch, roi_indices, alpha=args_config['alpha'])
                         loss.backward()
 
                         state_dict['out_avg_np'] = state_dict['out_avg'].detach().cpu().numpy()[0]
@@ -616,8 +651,8 @@ def run_experiment(args_config):
                     enc_in = (out-mean)/std
                     vox_pred = model(enc_in, inds_nc_torch.unsqueeze(0).cuda())
                     
-                    loss = F.mse_loss(vox_pred, stroke_target_nc)#+total_variation_loss(out)+0.01*norm_6(out)#- 0.1*torch.mean(F.cosine_similarity(vox_pred, target))
-
+                    # loss = F.mse_loss(vox_pred, stroke_target_nc)#+total_variation_loss(out)+0.01*norm_6(out)#- 0.1*torch.mean(F.cosine_similarity(vox_pred, target))
+                    loss = weighted_mse_by_roi(vox_pred, stroke_target_nc, inds_nc_torch, roi_indices, alpha=args_config['alpha'])
                     loss.backward()
 
                     state_dict['out_avg_np'] = state_dict['out_avg'].detach().cpu().numpy()[0]

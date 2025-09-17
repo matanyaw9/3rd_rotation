@@ -31,6 +31,7 @@ def build_cli_args(
     steps_to_do,
     roi_to_process=None,
     save_path=None,
+    alpha:float=None
 ):
     """Turn Python values into CLI flags for stroke_experimet_CLI.py."""
     args = [
@@ -39,6 +40,7 @@ def build_cli_args(
         "--image_type", image_type,
         "--steps_to_do", *map(str, steps_to_do),
         "--images_indices", *map(str, images_indices),
+        "--alpha", alpha,
     ]
     if create_montage:
         args.append("--create_montage")
@@ -65,6 +67,7 @@ def submit_job(
     roi_to_process=None,
     save_path=None,
     dry_run: bool = False,
+    alpha: float=None,
 ):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     out_pattern = str(LOG_DIR / f"%j_{job_name}.out")
@@ -78,6 +81,7 @@ def submit_job(
         steps_to_do=steps_to_do,
         roi_to_process=roi_to_process,
         save_path=save_path,
+        alpha=alpha,
     )
     run_cmd = [PYTHON_EXE, "-u", str(CLI_PATH), *cli_args]
     wrap_str = shlex.join(run_cmd)
@@ -143,6 +147,8 @@ def parse_args():
     p.add_argument("--create_montage", action="store_true", default=True)
     p.add_argument("--no-create_montage", dest="create_montage", action="store_false")
     p.add_argument("--roi_to_process", nargs="+")
+    p.add_argument('--alpha', type=str, default=None, 
+                    help='Alpha weight for stroked voxels in loss function. If None, uses regular MSE loss.')
     p.add_argument("--save_path")
 
     p.add_argument("--dry_run", action="store_true")
@@ -239,6 +245,7 @@ def main():
             roi_to_process=args.roi_to_process,
             save_path=args.save_path,
             dry_run=args.dry_run,
+            alpha=args.alpha,
         )
 
         # MANIFEST = PROJECT_ROOT / "logs" / f"submit_manifest_{args.run}.csv"

@@ -37,6 +37,8 @@ def argparse_args():
                         help='Whether to create a montage of the results for each image.')
     parser.add_argument('--montage_dir', type=str, default=None,
                         help=f'Where to create a montage of the results for each image. Default: {DEFAULT_SAVE_PATH}')
+    parser.add_argument('--alpha', type=float, default=None, 
+                        help='Alpha weight for stroked voxels in loss function. If None, uses regular MSE loss.')
 
     return parser.parse_args()
 
@@ -91,6 +93,7 @@ if __name__ == "__main__":
         'roi_to_process': args.roi_to_process,  # List of specific ROIs to process
         'create_montage': args.create_montage,
         'montage_dir': montage_dir,
+        'alpha': args.alpha,
         
         # 'save_throughout': true,
         # 'n_saves': 5,

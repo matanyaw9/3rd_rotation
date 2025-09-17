@@ -51,6 +51,7 @@ ROI_COVERAGE_DIR = '/home/matanyaw/DIP_decoder/data/roi_coverages'
 # ---- Reproducibility switch (add this near the top, before you build nets) ----
 
 SEED = 1337
+# SEED = 1249
 
 # Environment seeds (must be set before importing/using torch CUDA algorithms)
 os.environ["PYTHONHASHSEED"] = str(SEED)
